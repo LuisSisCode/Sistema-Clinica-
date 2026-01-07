@@ -1319,14 +1319,6 @@ ScrollView {
                                     color: "#94a3b8"
                                     font.pixelSize: 11
                                 }
-                                Label {
-                                    text: "ACCIONES"
-                                    Layout.preferredWidth: 50
-                                    horizontalAlignment: Text.AlignRight
-                                    font.bold: true
-                                    color: "#94a3b8"
-                                    font.pixelSize: 11
-                                }
                             }
                         }
 

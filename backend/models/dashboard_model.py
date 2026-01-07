@@ -1,6 +1,7 @@
 """
 Dashboard Model CORREGIDO - Funciona con repositories reales
 Corrige métodos inexistentes y mejora manejo de errores
+AHORA CON ALERTAS DE INVENTARIO Y PRODUCTOS BAJO STOCK
 """
 
 from typing import List, Dict, Any, Optional
@@ -47,7 +48,8 @@ except ImportError:
         DatabaseConnection = DummyRepository
 
 class DashboardModel(QObject):
-    """Model QObject para Dashboard con datos reales de BD - TOTALMENTE CORREGIDO"""
+    """Model QObject para Dashboard con datos reales de BD - TOTALMENTE CORREGIDO
+    AHORA CON ALERTAS DE INVENTARIO Y PRODUCTOS BAJO STOCK"""
     
     # ===============================
     # SIGNALS
@@ -63,6 +65,7 @@ class DashboardModel(QObject):
     # Signals para gráficos y alertas
     graficoDataChanged = Signal()
     alertasChanged = Signal()
+    alertasInventarioChanged = Signal()  # ✅ NUEVO: Para alertas de inventario
     periodoChanged = Signal()
     
     # Signal general de actualización
@@ -109,13 +112,20 @@ class DashboardModel(QObject):
         self._grafico_ingresos = []
         self._grafico_egresos = []
         self._alertas_vencimientos = []
+        self._alertas_inventario = []  # ✅ NUEVO: Alertas de inventario
+        self._productos_bajo_stock = []  # ✅ NUEVO: Productos con stock bajo específicamente
         
         # Timer para auto-refresh
         self._refresh_timer = QTimer(self)
         self._refresh_timer.timeout.connect(self._auto_refresh)
         self._refresh_timer.start(300000)  # 5 minutos
         
-        print("📊 DashboardModel inicializado con datos reales - TOTALMENTE CORREGIDO")
+        # Timer para actualizar alertas de inventario
+        self._alertas_timer = QTimer(self)
+        self._alertas_timer.timeout.connect(self._actualizar_alertas_inventario)
+        self._alertas_timer.start(10000)  # 10 segundos (más frecuente)
+        
+        print("📊 DashboardModel inicializado con datos reales - CON ALERTAS DE INVENTARIO")
         
         # Cargar datos iniciales
         QTimer.singleShot(1000, self._cargar_datos_iniciales)
@@ -207,6 +217,16 @@ class DashboardModel(QObject):
         """Lista de alertas de vencimientos"""
         return self._alertas_vencimientos
     
+    @Property('QVariantList', notify=alertasInventarioChanged)
+    def alertasInventario(self):
+        """✅ NUEVO: Lista de alertas de inventario (vencimientos + stock bajo)"""
+        return self._alertas_inventario
+    
+    @Property('QVariantList', notify=alertasInventarioChanged)
+    def productosBajoStockDashboard(self):
+        """✅ NUEVO: Productos con stock bajo específicamente para dashboard"""
+        return self._productos_bajo_stock
+    
     # ===============================
     # SLOTS PÚBLICOS - FILTRADO
     # ===============================
@@ -257,10 +277,85 @@ class DashboardModel(QObject):
             if self.estadistica_repo:
                 self.estadistica_repo.invalidate_statistics_caches()
             self._actualizar_todos_los_datos()
+            self._actualizar_alertas_inventario()  # ✅ Actualizar alertas también
             print("✅ Datos del dashboard refrescados")
         except Exception as e:
             print(f"❌ Error refrescando datos: {e}")
             self.errorOccurred.emit(f"Error refrescando datos: {str(e)}")
+    
+    @Slot(result='QVariant')
+    def obtenerAlertasDashboard(self):
+        """✅ NUEVO: Obtiene alertas para el dashboard desde el inventario"""
+        try:
+            # Importar el modelo de inventario dinámicamente
+            try:
+                from backend.models.inventario_model import InventarioModel
+                
+                # Crear una instancia temporal del inventario
+                inventario_temp = InventarioModel()
+                alertas = inventario_temp.obtener_alertas_inventario()
+                
+                if not alertas:
+                    return []
+                
+                # Filtrar solo alertas de stock bajo
+                alertas_stock_bajo = []
+                for alerta in alertas:
+                    if alerta.get('Tipo_Alerta') == 'STOCK BAJO':
+                        alertas_stock_bajo.append({
+                            'codigo': alerta.get('Codigo', ''),
+                            'nombre': alerta.get('Producto', ''),
+                            'stock_actual': alerta.get('Stock_Actual', 0),
+                            'stock_minimo': alerta.get('Minimo', 10),
+                            'detalle': alerta.get('Detalle', ''),
+                            'prioridad': alerta.get('Prioridad', 2)
+                        })
+                
+                print(f"📊 Dashboard: {len(alertas_stock_bajo)} alertas de stock bajo encontradas")
+                return alertas_stock_bajo
+                
+            except ImportError as e:
+                print(f"❌ No se pudo importar InventarioModel: {e}")
+                return []
+            
+        except Exception as e:
+            print(f"❌ Error obteniendo alertas para dashboard: {e}")
+            return []
+    
+    @Slot(result='QVariant')
+    def obtenerProductosBajoStockDashboard(self):
+        """✅ NUEVO: Obtiene productos con stock bajo específicamente para dashboard"""
+        try:
+            # Importar el repositorio directamente
+            try:
+                from backend.repositories.producto_repository import ProductoRepository
+                
+                producto_repo = ProductoRepository()
+                productos_bajo_stock = producto_repo.get_productos_bajo_stock(10) or []
+                
+                productos_formateados = []
+                for producto in productos_bajo_stock:
+                    productos_formateados.append({
+                        'id': producto.get('id', 0),
+                        'codigo': producto.get('Codigo', ''),
+                        'nombre': producto.get('Nombre', ''),
+                        'stock_total': producto.get('Stock_Total', 0),
+                        'stock_minimo': producto.get('Stock_Minimo', 10),
+                        'marca': producto.get('Marca_Nombre', ''),
+                        'precio_venta': producto.get('Precio_venta', 0),
+                        'estado': 'CRÍTICO' if producto.get('Stock_Total', 0) <= 0 else 'BAJO'
+                    })
+                
+                print(f"📦 Dashboard: {len(productos_formateados)} productos bajo stock")
+                return productos_formateados
+                
+            except ImportError as e:
+                print(f"❌ No se pudo importar ProductoRepository: {e}")
+                return []
+            
+        except Exception as e:
+            print(f"❌ Error obteniendo productos bajo stock: {e}")
+            return []
     
     def cleanup(self):
         """Limpia recursos del dashboard"""
@@ -268,6 +363,10 @@ class DashboardModel(QObject):
             if hasattr(self, '_refresh_timer') and self._refresh_timer.isActive():
                 self._refresh_timer.stop()
                 print("⏹️ Timer del dashboard detenido")
+            
+            if hasattr(self, '_alertas_timer') and self._alertas_timer.isActive():
+                self._alertas_timer.stop()
+                print("⏹️ Timer de alertas detenido")
         except Exception as e:
             print(f"Error limpiando dashboard: {e}")
             
@@ -286,6 +385,9 @@ class DashboardModel(QObject):
             
             # Cargar datos
             self._actualizar_todos_los_datos()
+            
+            # Cargar alertas de inventario
+            self._actualizar_alertas_inventario()
             
             # Verificación post-carga
             QTimer.singleShot(2000, self.debug_comparar_con_cierre_caja)
@@ -747,11 +849,59 @@ class DashboardModel(QObject):
             self._alertas_vencimientos = []
             self.alertasChanged.emit()
     
+    def _actualizar_alertas_inventario(self):
+        """✅ NUEVO: Actualiza alertas de inventario (stock bajo, vencimientos)"""
+        try:
+            print("🔄 Dashboard: Actualizando alertas de inventario...")
+            
+            # 1. Obtener alertas del inventario
+            try:
+                from backend.models.inventario_model import InventarioModel
+                
+                inventario_temp = InventarioModel()
+                alertas = inventario_temp.obtener_alertas_inventario()
+                
+                if alertas and len(alertas) > 0:
+                    self._alertas_inventario = alertas
+                    print(f"📊 Dashboard: {len(alertas)} alertas de inventario obtenidas")
+                else:
+                    self._alertas_inventario = []
+                    print("📊 Dashboard: No hay alertas de inventario")
+                    
+            except ImportError as e:
+                print(f"❌ No se pudo importar InventarioModel: {e}")
+                self._alertas_inventario = []
+            
+            # 2. Obtener productos bajo stock específicamente
+            try:
+                from backend.repositories.producto_repository import ProductoRepository
+                
+                producto_repo = ProductoRepository()
+                productos_bajo_stock = producto_repo.get_productos_bajo_stock(10) or []
+                
+                self._productos_bajo_stock = productos_bajo_stock
+                print(f"📦 Dashboard: {len(productos_bajo_stock)} productos bajo stock")
+                
+            except ImportError as e:
+                print(f"❌ No se pudo importar ProductoRepository: {e}")
+                self._productos_bajo_stock = []
+            
+            # 3. Emitir signal de actualización
+            self.alertasInventarioChanged.emit()
+            print("✅ Dashboard: Alertas de inventario actualizadas")
+            
+        except Exception as e:
+            print(f"❌ Error actualizando alertas de inventario: {e}")
+            self._alertas_inventario = []
+            self._productos_bajo_stock = []
+            self.alertasInventarioChanged.emit()
+    
     def _auto_refresh(self):
         """Auto-refresh periódico (cada 5 minutos)"""
         try:
             print("🔄 Auto-refresh del dashboard...")
             self._actualizar_todos_los_datos()
+            self._actualizar_alertas_inventario()  # ✅ Actualizar alertas también
         except Exception as e:
             print(f"❌ Error en auto-refresh: {e}")
 
@@ -760,16 +910,21 @@ class DashboardModel(QObject):
         try:
             print("🚨 DashboardModel: Iniciando desconexión de emergencia...")
             
-            # Detener timer inmediatamente
+            # Detener timers inmediatamente
             if hasattr(self, '_refresh_timer') and self._refresh_timer.isActive():
                 self._refresh_timer.stop()
                 print("   ⏹️ Refresh timer detenido")
+            
+            if hasattr(self, '_alertas_timer') and self._alertas_timer.isActive():
+                self._alertas_timer.stop()
+                print("   ⏹️ Alertas timer detenido")
             
             # Desconectar señales
             signals_to_disconnect = [
                 'farmaciaDataChanged', 'consultasDataChanged', 'laboratorioDataChanged',
                 'enfermeriaDataChanged', 'serviciosBasicosDataChanged', 'graficoDataChanged',
-                'alertasChanged', 'periodoChanged', 'dashboardUpdated', 'errorOccurred'
+                'alertasChanged', 'alertasInventarioChanged', 'periodoChanged', 
+                'dashboardUpdated', 'errorOccurred'
             ]
             
             for signal_name in signals_to_disconnect:
@@ -788,6 +943,8 @@ class DashboardModel(QObject):
             self._grafico_ingresos = []
             self._grafico_egresos = []
             self._alertas_vencimientos = []
+            self._alertas_inventario = []
+            self._productos_bajo_stock = []
             
             # Anular repositorios
             self.estadistica_repo = None
@@ -822,6 +979,7 @@ class DashboardModel(QObject):
             
             # Forzar actualización
             self._actualizar_todos_los_datos()
+            self._actualizar_alertas_inventario()
             
             print("✅ Actualización completa finalizada")
             
@@ -872,12 +1030,15 @@ class DashboardModel(QObject):
             print(f"   TOTAL INGRESOS: Bs {self.totalIngresos:.2f}")
             print(f"   TOTAL EGRESOS: Bs {self.totalEgresos:.2f}")
             
-            # Intentar obtener datos de CierreCaja si está disponible
-            try:
-                # Esto requeriría acceso al CierreCajaModel, pero es solo para debug
-                print("ℹ️ Para comparar con CierreCaja, verificar manualmente")
-            except:
-                pass
+            # Mostrar alertas de inventario
+            print(f"📦 ALERTAS INVENTARIO: {len(self._alertas_inventario)} alertas")
+            for i, alerta in enumerate(self._alertas_inventario[:3]):  # Mostrar solo 3
+                print(f"   {i+1}. {alerta.get('Producto', '')} - {alerta.get('Tipo_Alerta', '')}")
+            
+            # Mostrar productos bajo stock
+            print(f"📦 PRODUCTOS BAJO STOCK: {len(self._productos_bajo_stock)} productos")
+            for i, producto in enumerate(self._productos_bajo_stock[:3]):  # Mostrar solo 3
+                print(f"   {i+1}. {producto.get('Nombre', '')} - Stock: {producto.get('Stock_Total', 0)}")
                 
         except Exception as e:
             print(f"❌ Error en comparación: {e}")

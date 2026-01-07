@@ -30,7 +30,7 @@ Item {
     
     ColumnLayout {
         anchors.fill: parent
-        spacing: 8
+        spacing: 4
         
         // Campo de búsqueda con dropdown
         Rectangle {
@@ -165,11 +165,12 @@ Item {
     // Popup del dropdown
     Popup {
         id: dropdownPopup
-        y: parent.height + 4
+        y: parent.height 
         width: parent.width
-        height: Math.min(300, dropdownContent.implicitHeight)
+        height: Math.min(320, dropdownContent.implicitHeight + 20)
         
         background: Rectangle {
+            // MODIFICAR DESPUES A
             color: "white"
             radius: 8
             border.color: lightGray
@@ -199,7 +200,7 @@ Item {
                 
                 delegate: Rectangle {
                     width: dropdownListView.width
-                    height: 36
+                    height: 40
                     color: {
                         if (dropdownListView.currentIndex === index) return Qt.lighter(primaryColor, 1.8)
                         if (marcaHover.containsMouse) return lightGray
@@ -207,8 +208,9 @@ Item {
                     }
                     
                     Behavior on color {
-                        ColorAnimation { duration: 150 }
+                        ColorAnimation { duration: 100 }
                     }
+                    radius: 5
                     
                     RowLayout {
                         anchors.fill: parent
@@ -296,9 +298,8 @@ Item {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 40
                 color: crearMarcaHover.containsMouse ? Qt.lighter(successColor, 1.8) : "transparent"
-                
                 Behavior on color {
-                    ColorAnimation { duration: 150 }
+                    ColorAnimation { duration: 100 }
                 }
                 
                 RowLayout {
@@ -314,7 +315,7 @@ Item {
                     
                     Label {
                         text: 'Crear marca: "' + searchField.text.trim() + '"'
-                        font.pixelSize: 11
+                        font.pixelSize: 12
                         font.bold: true
                         color: successColor
                         Layout.fillWidth: true
@@ -331,6 +332,7 @@ Item {
                     }
                 }
             }
+
         }
     }
     

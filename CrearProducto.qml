@@ -4,12 +4,12 @@ import QtQuick.Layouts 1.15
 import QtQuick.Controls.Material 2.15
 
 // ===============================================================================
-// CREAR PRODUCTO - FIFO 2.0 (DISEÑO MODAL CENTRADO OPTIMIZADO)
+// CREAR PRODUCTO - FIFO 2.0 (DISEÑO MODAL CENTRADO)
 // ===============================================================================
-// Versión mejorada con mejor uso del espacio
-// - Eliminado espacio en blanco en lado derecho
-// - Mejor distribución de elementos
-// - Mantiene compatibilidad con MarcaComboBox
+// Versión Rectangle con overlay semi-transparente + modal centrado
+// - Sin sombra (más simple y rápido)
+// - Click en overlay NO cierra (más seguro)
+// - Modal flotante de 950x500px centrado
 // ===============================================================================
 
 Rectangle {
@@ -418,22 +418,21 @@ Rectangle {
             console.log("⚠️ No se puede forzar selección - ID:", marcaIdSeleccionada)
         }
     }
-
     // ===============================
-    // MODAL CENTRADO MEJORADO
+    // MODAL CENTRADO
     // ===============================
     Rectangle {
-        id: modalContent
-        width: Math.min(900, parent.width * 0.92)
-        height: Math.min(520, parent.height * 0.85)
-        x: (parent.width - width) / 2
-        y: (parent.height - height) / 2
-        color: white
-        radius: 12
-        border.color: borderColor
-        border.width: 1
-        z: 10001
-    
+            id: modalContent
+            width: Math.min(550, parent.width * 0.95)
+            height: Math.min(500, parent.height * 0.88)
+            x: (parent.width - width) / 2
+            y: (parent.height - height) / 2
+            color: white
+            radius: 12
+            border.color: borderColor
+            border.width: 1
+            z: 10001
+        
         // Detiene propagación de clicks al overlay
         MouseArea {
             anchors.fill: parent
@@ -525,7 +524,7 @@ Rectangle {
             }
 
             // ===============================
-            // CONTENIDO PRINCIPAL OPTIMIZADO
+            // CONTENIDO PRINCIPAL
             // ===============================
             Rectangle {
                 Layout.fillWidth: true
@@ -534,11 +533,11 @@ Rectangle {
                 
                 ScrollView {
                     anchors.fill: parent
-                    anchors.margins: 14
+                    anchors.margins: baseSpacing
                     clip: true
                     
                     ColumnLayout {
-                        width: parent.width
+                        width: parent.width - 20
                         spacing: 12
                         
                         // ===============================
@@ -546,40 +545,41 @@ Rectangle {
                         // ===============================
                         Rectangle {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: 60
+                            Layout.preferredHeight: 65
                             color: "#EFF6FF"
                             border.color: "#3B82F6"
                             border.width: 1
                             radius: 6
                             visible: !modoEdicion
                             
-                            RowLayout {
+                            ColumnLayout {
                                 anchors.fill: parent
-                                anchors.margins: 10
-                                spacing: 8
+                                anchors.margins: 12
+                                spacing: 6
                                 
-                                Text {
-                                    text: "ℹ️"
-                                    font.pixelSize: 20
-                                }
-                                
-                                ColumnLayout {
-                                    spacing: 4
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 8
+                                    
+                                    Text {
+                                        text: "ℹ️"
+                                        font.pixelSize: 18
+                                    }
                                     
                                     Text {
                                         text: "IMPORTANTE"
-                                        font.pixelSize: 13
+                                        font.pixelSize: 12
                                         font.bold: true
-                                        color: "#1E40AF"
+                                        color: grayDark
                                     }
-                                    
-                                    Text {
-                                        Layout.fillWidth: true
-                                        text: "El stock se calculará en la primera compra • El precio de venta se define al comprar"
-                                        font.pixelSize: 11
-                                        color: "#374151"
-                                        wrapMode: Text.WordWrap
-                                    }
+                                }
+                                
+                                Text {
+                                    Layout.fillWidth: true
+                                    text: "El stock se calculará en la primera compra • El precio de venta se define al comprar"
+                                    font.pixelSize: 11
+                                    color: grayDark
+                                    wrapMode: Text.WordWrap
                                 }
                             }
                         }
@@ -587,15 +587,13 @@ Rectangle {
                         // ===============================
                         // FILA 1: Código, Nombre, Marca
                         // ===============================
-                        GridLayout {
+                        RowLayout {
                             Layout.fillWidth: true
-                            columns: 3
-                            columnSpacing: 12
-                            rowSpacing: 4
+                            spacing: 12
                             
                             // CÓDIGO
                             ColumnLayout {
-                                Layout.fillWidth: true
+                                Layout.preferredWidth: 150
                                 spacing: 4
                                 
                                 Text {
@@ -626,7 +624,7 @@ Rectangle {
                                         onTextChanged: inputProductCode = text
                                         
                                         Text {
-                                            text: "Auto-generado"
+                                            text: "Auto"
                                             color: grayMedium
                                             visible: !parent.text && !modoEdicion
                                             font.pixelSize: 11
@@ -638,7 +636,6 @@ Rectangle {
                             // NOMBRE DEL PRODUCTO
                             ColumnLayout {
                                 Layout.fillWidth: true
-                                Layout.columnSpan: 2
                                 spacing: 4
                                 
                                 Text {
@@ -679,8 +676,7 @@ Rectangle {
                             
                             // MARCA
                             ColumnLayout {
-                                Layout.fillWidth: true
-                                Layout.columnSpan: 3
+                                Layout.preferredWidth: 230
                                 spacing: 4
                                 
                                 Text {
@@ -726,17 +722,15 @@ Rectangle {
                         }
                         
                         // ===============================
-                        // FILA 2: Unidad y Stock Mínimo
+                        // FILA 2: Unidad, Stock Min/Max
                         // ===============================
-                        GridLayout {
+                        RowLayout {
                             Layout.fillWidth: true
-                            columns: 3
-                            columnSpacing: 12
-                            rowSpacing: 4
+                            spacing: 12
                             
                             // UNIDAD DE MEDIDA
                             ColumnLayout {
-                                Layout.fillWidth: true
+                                Layout.preferredWidth: 180
                                 spacing: 4
                                 
                                 Text {
@@ -750,7 +744,7 @@ Rectangle {
                                     id: unidadCombo
                                     Layout.fillWidth: true
                                     Layout.preferredHeight: inputHeight
-                                    model: ["Tabletas", "Cápsulas", "ml", "mg", "g", "Unidades", "Sobres", "Frascos", "Ampollas", "Jeringas"]
+                                    model: ["Tabletas", "Cápsulas", "ml", "mg", "g", "Unidades", "Sobres", "Frascos"]
                                     
                                     onCurrentTextChanged: {
                                         inputMeasureUnit = currentText
@@ -762,42 +756,12 @@ Rectangle {
                                         border.width: 1
                                         radius: 6
                                     }
-                                    
-                                    contentItem: Text {
-                                        text: parent.displayText
-                                        font.pixelSize: 11
-                                        color: grayDark
-                                        verticalAlignment: Text.AlignVCenter
-                                        horizontalAlignment: Text.AlignLeft
-                                        leftPadding: 8
-                                    }
-                                    
-                                    popup: Popup {
-                                        y: parent.height
-                                        width: parent.width
-                                        implicitHeight: contentItem.implicitHeight
-                                        
-                                        contentItem: ListView {
-                                            clip: true
-                                            implicitHeight: contentHeight
-                                            model: parent.parent.model
-                                            currentIndex: parent.parent.currentIndex
-                                            
-                                            delegate: ItemDelegate {
-                                                width: parent.width
-                                                height: 30
-                                                text: modelData
-                                                font.pixelSize: 11
-                                                highlighted: parent.currentIndex === index
-                                            }
-                                        }
-                                    }
                                 }
                             }
                             
                             // STOCK MÍNIMO
                             ColumnLayout {
-                                Layout.fillWidth: true
+                                Layout.preferredWidth: 140
                                 spacing: 4
                                 
                                 Text {
@@ -836,26 +800,11 @@ Rectangle {
                                 }
                             }
                             
-                            // ESPACIO ADICIONAL (para futuros campos)
-                            ColumnLayout {
-                                Layout.fillWidth: true
-                                spacing: 4
-                                
-                                Text {
-                                    text: " "
-                                    font.pixelSize: 12
-                                    color: "transparent"
-                                }
-                                
-                                Item {
-                                    Layout.fillWidth: true
-                                    Layout.preferredHeight: inputHeight
-                                }
-                            }
+                            Item { Layout.fillWidth: true }
                         }
                         
                         // ===============================
-                        // DETALLES DEL PRODUCTO (ALTURA MEJORADA)
+                        // DETALLES DEL PRODUCTO
                         // ===============================
                         ColumnLayout {
                             Layout.fillWidth: true
@@ -870,7 +819,7 @@ Rectangle {
                             
                             Rectangle {
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: 90
+                                Layout.preferredHeight: 75
                                 color: white
                                 border.color: detallesField.activeFocus ? primaryBlue : borderColor
                                 border.width: 1
@@ -878,7 +827,7 @@ Rectangle {
                                 
                                 ScrollView {
                                     anchors.fill: parent
-                                    anchors.margins: 6
+                                    anchors.margins: 5
                                     clip: true
                                     
                                     TextArea {
@@ -887,7 +836,6 @@ Rectangle {
                                         wrapMode: TextArea.Wrap
                                         font.pixelSize: 11
                                         color: grayDark
-                                        placeholderText: "Información adicional, composición, presentación, etc."
                                         
                                         onTextChanged: inputProductDetails = text
                                         
@@ -898,138 +846,72 @@ Rectangle {
                                 }
                             }
                         }
-                        
-                        // ===============================
-                        // MENSAJES DE ESTADO
-                        // ===============================
-                        Rectangle {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: 40
-                            color: showSuccessMessage ? "#DCFCE7" : (showErrorMessage ? "#FEE2E2" : "transparent")
-                            radius: 6
-                            visible: showSuccessMessage || showErrorMessage
-                            border.color: showSuccessMessage ? successGreen : (showErrorMessage ? dangerRed : "transparent")
-                            border.width: 1
-                            
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.margins: 8
-                                spacing: 8
-                                
-                                Text {
-                                    text: showSuccessMessage ? "✅" : "❌"
-                                    font.pixelSize: 14
-                                }
-                                
-                                Text {
-                                    Layout.fillWidth: true
-                                    text: showSuccessMessage ? successMessage : errorMessage
-                                    font.pixelSize: 11
-                                    color: showSuccessMessage ? successGreen : dangerRed
-                                    wrapMode: Text.WordWrap
-                                    elide: Text.ElideRight
-                                }
-                            }
-                        }
                     }
                 }
             }
 
             // ===============================
-            // FOOTER MEJORADO
+            // FOOTER
             // ===============================
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 70
+                Layout.preferredHeight: 65
                 color: "#F9FAFB"
                 radius: 12
                 
-                // Borde superior sutil
-                Rectangle {
-                    anchors.top: parent.top
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    height: 1
-                    color: "#E5E7EB"
-                }
-                
                 RowLayout {
                     anchors.fill: parent
-                    anchors.margins: 16
+                    anchors.margins: 12
                     spacing: 12
                     
-                    // Información contextual
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 2
+                    Item { Layout.fillWidth: true }
+                    
+                    // Botón Cancelar
+                    Button {
+                        Layout.preferredWidth: 120
+                        Layout.preferredHeight: 40
+                        text: "Cancelar"
                         
-                        Text {
-                            text: modoEdicion ? 
-                                "Los cambios se aplicarán inmediatamente" : 
-                                "Todos los campos marcados con * son obligatorios"
-                            font.pixelSize: 10
-                            color: grayMedium
+                        background: Rectangle {
+                            color: parent.pressed ? "#E5E7EB" : "#F3F4F6"
+                            border.color: borderColor
+                            border.width: 1
+                            radius: 6
                         }
                         
-                        Text {
-                            text: "FIFO 2.0 • Gestión de Inventario Inteligente"
-                            font.pixelSize: 9
-                            color: grayMedium
-                            opacity: 0.7
+                        contentItem: Text {
+                            text: parent.text
+                            color: grayDark
+                            font.bold: true
+                            font.pixelSize: 12
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
                         }
+                        
+                        onClicked: cancelarCreacion()
                     }
                     
-                    // Botones
-                    RowLayout {
-                        spacing: 8
+                    // Botón Guardar
+                    Button {
+                        Layout.preferredWidth: 160
+                        Layout.preferredHeight: 40
+                        text: modoEdicion ? "💾 Guardar Cambios" : "➕ Crear Producto"
                         
-                        // Botón Cancelar
-                        Button {
-                            Layout.preferredWidth: 110
-                            Layout.preferredHeight: 38
-                            text: "Cancelar"
-                            
-                            background: Rectangle {
-                                color: parent.pressed ? "#E5E7EB" : "#F3F4F6"
-                                border.color: borderColor
-                                border.width: 1
-                                radius: 6
-                            }
-                            
-                            contentItem: Text {
-                                text: parent.text
-                                color: grayDark
-                                font.bold: true
-                                font.pixelSize: 12
-                                horizontalAlignment: Text.AlignHCenter
-                                verticalAlignment: Text.AlignVCenter
-                            }
-                            
-                            onClicked: cancelarCreacion()
+                        background: Rectangle {
+                            color: parent.pressed ? "#1D4ED8" : primaryBlue
+                            radius: 6
                         }
                         
-                        // Botón Guardar
-                        Button {
-                            Layout.preferredWidth: 160
-                            Layout.preferredHeight: 38
-                            text: modoEdicion ? "💾 Guardar Cambios" : "➕ Crear Producto"
-                            
-                            background: Rectangle {
-                                color: parent.pressed ? "#1D4ED8" : primaryBlue
-                                radius: 6
-                            }
-                            
-                            contentItem: Text {
-                                text: parent.text
-                                color: white
-                                font.bold: true
-                                font.pixelSize: 12
-                                horizontalAlignment: Text.AlignHCenter
-                                verticalAlignment: Text.AlignVCenter
-                            }
-                            
-                            onClicked: guardarProducto()
+                        contentItem: Text {
+                            text: parent.text
+                            color: white
+                            font.bold: true
+                            font.pixelSize: 12
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
                         }
+                        
+                        onClicked: guardarProducto()
                     }
                 }
             }
@@ -1037,7 +919,7 @@ Rectangle {
     }
 
     Component.onCompleted: {
-        console.log("🚀 CrearProducto.qml (Modal centrado OPTIMIZADO) cargado")
+        console.log("🚀 CrearProducto.qml (Modal centrado) cargado")
         console.log("   - InventarioModel:", !!inventarioModel)
         console.log("   - FarmaciaData:", !!farmaciaData)
     }

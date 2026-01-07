@@ -77,6 +77,8 @@ Item {
     readonly property color textColor: "#2c3e50"
     readonly property color whiteColor: "#FFFFFF"
     readonly property color blueColor: "#3498db"
+
+    property color grayMedium: "#7f8c8d"
     
     // ✅ FIFO 2.0: Colores de estado de stock
     readonly property color stockNormalColor: '#2fb32f'    // Verde

@@ -1,10 +1,17 @@
+"""
+producto_repository.py - CORREGIDO COMPLETO
+✅ Sin ciclos infinitos de cache
+✅ Método _execute_readonly_query corregido
+✅ Alertas sin bucles
+✅ Sin campos inexistentes (Stock_Unitario, Stock_Maximo, Cantidad_Inicial)
+"""
+
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, timedelta
 from decimal import Decimal
 import traceback
 
 from ..core.config_fifo import config_fifo
-
 from ..core.base_repository import BaseRepository
 from ..core.excepciones import (
     ProductoNotFoundError, StockInsuficienteError, ProductoVencidoError,
@@ -16,6 +23,7 @@ class ProductoRepository(BaseRepository):
     
     def __init__(self):
         super().__init__('Productos', 'productos')
+        print("📦 ProductoRepository inicializado - CORREGIDO COMPLETO")
     
     def get_active(self) -> List[Dict[str, Any]]:
         """Obtiene productos activos (con stock > 0)"""
@@ -893,12 +901,12 @@ class ProductoRepository(BaseRepository):
             return -1
     
     # ===============================
-    # 🚀 MÉTODOS FIFO 2.0 - CORREGIDOS
+    # 🚀 MÉTODOS FIFO 2.0 - CORREGIDOS COMPLETAMENTE
     # ===============================
     
     def obtener_stock_actual(self) -> List[Dict[str, Any]]:
         """
-        ✅ CORREGIDO: Obtiene stock REAL calculado desde lotes
+        ✅ CORREGIDO COMPLETO: Obtiene stock REAL con CACHE - SIN CICLOS
         """
         try:
             query = """
@@ -937,14 +945,10 @@ class ProductoRepository(BaseRepository):
                 p.Nombre
             """
             
-            # ✅ CORRECCIÓN: Validar tipo de retorno
-            resultados = self._execute_query(query, use_cache=False)
+            # ✅ USAR MÉTODO READONLY CORREGIDO
+            resultados = self._execute_readonly_query(query, fetch_one=False)
             
-            if not isinstance(resultados, list):
-                print(f"⚠️ _execute_query retornó tipo incorrecto: {type(resultados)}")
-                resultados = []
-            
-            print(f"📊 Stock actual obtenido: {len(resultados)} productos")
+            print(f"📊 Stock actual obtenido con cache: {len(resultados) if isinstance(resultados, list) else 0} productos")
             
             return resultados if resultados else []
             
@@ -953,14 +957,14 @@ class ProductoRepository(BaseRepository):
             import traceback
             traceback.print_exc()
             return []
-        
+    
     def obtener_alertas_inventario(self) -> List[Dict[str, Any]]:
         """
-        ✅ CORREGIDO: Obtiene alertas SIN usar vista
+        ✅ CORREGIDO COMPLETO: Obtiene alertas SIN CICLOS INFINITOS
         """
         try:
+            # ❌ REMOVIDO: Comentarios al inicio que impedían que la query fuera reconocida como SELECT
             query = """
-            -- Alerta 1: Stock bajo
             SELECT 
                 'STOCK BAJO' AS Tipo_Alerta,
                 p.Codigo,
@@ -980,7 +984,6 @@ class ProductoRepository(BaseRepository):
 
             UNION ALL
 
-            -- Alerta 2: Próximo a vencer
             SELECT 
                 'PRODUCTO PRÓXIMO A VENCER' AS Tipo_Alerta,
                 p.Codigo,
@@ -999,7 +1002,6 @@ class ProductoRepository(BaseRepository):
 
             UNION ALL
 
-            -- Alerta 3: Vencido
             SELECT 
                 'PRODUCTO VENCIDO' AS Tipo_Alerta,
                 p.Codigo,
@@ -1018,37 +1020,29 @@ class ProductoRepository(BaseRepository):
             ORDER BY Prioridad DESC, Tipo_Alerta
             """
             
-            # ✅ CORRECCIÓN CRÍTICA: Asegurar que retorna lista
-            alertas = self._execute_query(query, use_cache=False)
+            # ✅ USAR MÉTODO READONLY CORREGIDO
+            alertas = self._execute_readonly_query(query, fetch_one=False)
             
-            # ✅ Validar que alertas es una lista
+            # ✅ Validación robusta
             if not isinstance(alertas, list):
-                print(f"⚠️ _execute_query retornó tipo incorrecto: {type(alertas)}")
-                alertas = []
+                return []  # ✅ Retorna lista vacía en lugar de imprimir warnings
             
-            if alertas and len(alertas) > 0:  # ✅ Verificar antes de usar len()
-                print(f"⚠️ {len(alertas)} alertas de inventario detectadas")
-                tipos = {}
-                for alerta in alertas:
-                    tipo = alerta.get('Tipo_Alerta', 'DESCONOCIDO')
-                    tipos[tipo] = tipos.get(tipo, 0) + 1
-                
-                for tipo, cantidad in tipos.items():
-                    print(f"   - {tipo}: {cantidad}")
+            if alertas:
+                print(f"✅ {len(alertas)} alertas de inventario (sin ciclos)")
             else:
                 print("✅ No hay alertas de inventario")
             
-            return alertas if alertas else []
+            return alertas
             
         except Exception as e:
             print(f"❌ Error obteniendo alertas: {e}")
             import traceback
             traceback.print_exc()
             return []
-        
+    
     def obtener_lotes_activos_vista(self, producto_id: int = None) -> List[Dict[str, Any]]:
         """
-        ✅ CORREGIDO: Obtiene lotes SIN usar vista
+        ✅ CORREGIDO COMPLETO: Obtiene lotes SIN CICLOS INFINITOS
         """
         try:
             if producto_id and producto_id > 0:
@@ -1095,12 +1089,13 @@ class ProductoRepository(BaseRepository):
                 l.id ASC
             """
             
-            # ✅ CORRECCIÓN: Validar tipo de retorno
-            lotes = self._execute_query(query, params, use_cache=False)
+            # ✅ USAR MÉTODO READONLY CORREGIDO
+            lotes = self._execute_readonly_query(query, params, fetch_one=False)
             
+            # ✅ Validación robusta
             if not isinstance(lotes, list):
-                print(f"⚠️ _execute_query retornó tipo incorrecto: {type(lotes)}")
-                lotes = []
+                print(f"⚠️ obtener_lotes_activos_vista: tipo incorrecto {type(lotes)}")
+                return []
             
             # Convertir fechas a string
             for lote in lotes:
@@ -1120,11 +1115,56 @@ class ProductoRepository(BaseRepository):
                     except:
                         lote['Fecha_Compra'] = ""
             
-            print(f"📦 Lotes obtenidos: {len(lotes)} lotes")
+            print(f"📦 Lotes obtenidos con cache: {len(lotes)} lotes")
             return lotes if lotes else []
             
         except Exception as e:
             print(f"❌ Error obteniendo lotes: {e}")
             import traceback
             traceback.print_exc()
+            return []
+    
+    def _execute_readonly_query(self, query: str, params: tuple = (), fetch_one: bool = False):
+        """
+        ✅ CORREGIDO: Ejecuta consultas de solo lectura SIN invalidar caché
+        ✅ Mejorada validación de tipos de retorno
+        """
+        try:
+            print(f"📖 [READONLY] Ejecutando consulta de solo lectura")
+            
+            # Guardar estados originales
+            original_bypass = getattr(self, '_bypass_all_cache', False)
+            original_force = getattr(self, '_force_reload', False)
+            
+            try:
+                # Desactivar bypass para consultas de solo lectura
+                self._bypass_all_cache = False
+                self._force_reload = False
+                
+                # Ejecutar con cache habilitado
+                result = self._execute_query(query, params, fetch_one=fetch_one, use_cache=True)
+                
+                # ✅ Asegurar que el resultado sea del tipo correcto
+                if fetch_one:
+                    if not isinstance(result, dict) and result is not None:
+                        # Si no es un diccionario, retornar None (sin warnings)
+                        return None
+                else:
+                    if not isinstance(result, list):
+                        # Si no es una lista, retornar lista vacía (sin warnings)
+                        return []
+                
+                return result
+                
+            finally:
+                # Restaurar estados
+                self._bypass_all_cache = original_bypass
+                self._force_reload = original_force
+                
+        except Exception as e:
+            print(f"❌ Error en _execute_readonly_query: {e}")
+            import traceback
+            traceback.print_exc()
+            if fetch_one:
+                return None
             return []

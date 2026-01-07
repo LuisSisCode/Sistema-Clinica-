@@ -3,7 +3,6 @@ import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Controls.Material 2.15
 
-// 🚀 CrearCompra.qml - Sistema FIFO 2.0 con UX Mejorada
 Item {
     id: crearCompraRoot
     
@@ -543,10 +542,22 @@ Item {
                                 }
                                 
                                 Button {
-                                    text: "➕"
+                                    text: "🔄"
                                     Layout.preferredWidth: 36
                                     Layout.preferredHeight: 36
                                     font.pixelSize: 16
+                                    
+                                    ToolTip.visible: hovered
+                                    ToolTip.text: "Actualizar proveedores"
+                                    ToolTip.delay: 500
+                                    
+                                    background: Rectangle {
+                                        color: '#829db1' ? '#1b79bd' : "transparent"
+                                        border.color: parent.hovered ? blueColor : "transparent"
+                                        border.width: 1 
+                                        radius: 4
+                                    }
+                                    
                                     onClicked: {
                                         if (compraModel) compraModel.force_refresh_proveedores()
                                     }
@@ -558,7 +569,7 @@ Item {
                     // SECCIÓN BÚSQUEDA DE PRODUCTO
                     Rectangle {
                         Layout.fillWidth: true
-                        height: 80
+                        height: 90
                         color: whiteColor
                         radius: 8
                         border.color: "#e0e0e0"
@@ -578,7 +589,7 @@ Item {
                             
                             Rectangle {
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: 40
+                                Layout.preferredHeight: 50
                                 color: "#f8f9fa"
                                 radius: 6
                                 border.color: productCodeField.activeFocus ? blueColor : "#ddd"
@@ -621,12 +632,12 @@ Item {
                                     Button {
                                         text: "➕ Crear"
                                         visible: mostrarButtonCrearProducto
-                                        Layout.preferredHeight: 28
+                                        Layout.preferredHeight: 40
                                         Layout.preferredWidth: 80
-                                        font.pixelSize: 10
+                                        font.pixelSize: 16
                                         
                                         background: Rectangle {
-                                            color: parent.hovered ? "#43a047" : successColor
+                                            color: parent.hovered ? '#4359a0' : successColor
                                             radius: 4
                                         }
                                         
