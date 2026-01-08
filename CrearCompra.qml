@@ -457,15 +457,22 @@ Item {
             return false
         }
         
-        // Usar el método CORRECTO: completar_compra
-        var resultado = compraModel.completar_compra(proveedor_id)
+        // ✅ CORRECCIÓN: Si está en modo edición, usar actualizar_compra en lugar de completar_compra
+        var resultado = false
+        if (modoEdicion) {
+            console.log("✏️ Actualizando compra existente...")
+            resultado = compraModel.actualizar_compra(proveedor_id)
+        } else {
+            console.log("🛒 Creando nueva compra...")
+            resultado = compraModel.completar_compra(proveedor_id)
+        }
         
         if (resultado) {
-            showSuccess("✅ Compra completada exitosamente")
+            showSuccess("✅ " + (modoEdicion ? "Compra actualizada" : "Compra completada") + " exitosamente")
             limpiarFormulario()
             return true
         } else {
-            showError("❌ Error al completar la compra")
+            showError("❌ Error al " + (modoEdicion ? "actualizar" : "completar") + " la compra")
             return false
         }
     }

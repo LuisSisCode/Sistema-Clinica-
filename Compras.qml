@@ -39,6 +39,10 @@ Item {
     property bool showDeleteConfirmDialog: false
     property var compraToDelete: null
     property var selectedPurchase: null  // ✅ MANTENER - se usa para menú contextual
+    
+    // 🚨 NUEVA PROPIEDAD: Diálogo de advertencia por ventas
+    property bool showVentasWarningDialog: false
+    property var compraConVentas: null
 
     // MODELO PARA COMPRAS PAGINADAS
     ListModel {
@@ -119,18 +123,61 @@ Item {
         detalleCompraDialog.abrir(compraId)
     }
 
-    // Función para cargar compra en edición
+    // Función para cargar compra en edición - MODIFICADA
     function cargarCompraParaEdicion(compraId) {
         console.log("✏️ Cargando compra para edición:", compraId)
+        
+        // Buscar los datos de la compra
+        var compraData = null
+        for (var i = 0; i < compraModel.compras_recientes.length; i++) {
+            if (compraModel.compras_recientes[i].id === compraId) {
+                compraData = compraModel.compras_recientes[i]
+                break
+            }
+        }
+        
+        // 🚨 NUEVA VERIFICACIÓN: Usar la función del modelo para verificar ventas
+        if (compraModel && typeof compraModel.verificar_compras_ventas === "function") {
+            console.log("🔍 Verificando si compra tiene ventas asociadas...")
+            
+            // Llamar al método del backend para verificar ventas
+            var tieneVentas = compraModel.verificar_compras_ventas(compraId)
+            
+            if (tieneVentas) {
+                console.log("🚨 Compra", compraId, "TIENE ventas asociadas - No se puede editar")
+                
+                // Mostrar diálogo de advertencia
+                compraConVentas = compraData
+                showVentasWarningDialog = true
+                
+                // También mostrar notificación toast
+                showNotification(
+                    "No se puede editar esta compra",
+                    "Ya tiene ventas asociadas en el sistema",
+                    "error"
+                )
+                
+                // NO NAVEGAR A EDICIÓN - SALIR AQUÍ
+                return
+            } else {
+                console.log("✅ Compra", compraId, "NO tiene ventas asociadas - Proceder con edición")
+            }
+        } else {
+            console.log("⚠️ Modelo no tiene función verificar_compras_ventas")
+        }
+        
+        // Si llegamos aquí, no hay ventas o no podemos verificar - proceder con edición
+        console.log("📝 Procediendo con edición de compra:", compraId)
         
         // Llamar al método del modelo para cargar los datos
         var exito = compraModel.cargar_compra_para_edicion(compraId)
         
         if (exito) {
             // Emitir señal para navegar a CrearCompra
-            navegarAEditarCompra(compraId, null)
+            navegarAEditarCompra(compraId, compraData)
         } else {
             console.log("❌ Error cargando compra para edición")
+            showNotification("Error", "No se pudo cargar la compra para edición", "error")
         }
     }
     
@@ -1061,6 +1108,204 @@ Item {
             }
         }
     }
+    
+    // 🚨 NUEVO: MODAL DE ADVERTENCIA POR VENTAS ASOCIADAS
+    Rectangle {
+        id: ventasWarningOverlay
+        anchors.fill: parent
+        color: "#000000"
+        opacity: 0.7
+        visible: showVentasWarningDialog
+        z: 1000
+        
+        MouseArea {
+            anchors.fill: parent
+            onClicked: {
+                showVentasWarningDialog = false
+            }
+        }
+    }
+    
+    Rectangle {
+        id: ventasWarningDialog
+        anchors.centerIn: parent
+        width: 450
+        height: 320
+        
+        visible: showVentasWarningDialog
+        z: 2001
+        
+        color: "#ffffff"
+        radius: 12
+        border.color: "#FF9800"
+        border.width: 2
+        
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 24
+            spacing: 20
+            
+            // Header con icono de advertencia
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 16
+                
+                Rectangle {
+                    Layout.preferredWidth: 50
+                    Layout.preferredHeight: 50
+                    color: "#FFF3E0"
+                    radius: 25
+                    border.color: "#FF9800"
+                    border.width: 2
+                    
+                    Label {
+                        anchors.centerIn: parent
+                        text: "⚠️"
+                        font.pixelSize: 24
+                        color: "#FF9800"
+                    }
+                }
+                
+                ColumnLayout {
+                    spacing: 4
+                    
+                    Label {
+                        text: "Compra con ventas asociadas"
+                        color: "#E65100"
+                        font.bold: true
+                        font.pixelSize: 18
+                    }
+                    
+                    Label {
+                        text: compraConVentas ? `Compra #${compraConVentas.id} - ${compraConVentas.proveedor}` : ""
+                        color: "#7F8C8D"
+                        font.pixelSize: 14
+                    }
+                }
+            }
+            
+            // Mensaje de advertencia
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                color: "#FFF9C4"
+                radius: 8
+                border.color: "#FFD54F"
+                border.width: 1
+                
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: 16
+                    spacing: 12
+                    
+                    Label {
+                        text: "🚨 No se puede editar esta compra"
+                        color: "#E65100"
+                        font.bold: true
+                        font.pixelSize: 14
+                    }
+                    
+                    ColumnLayout {
+                        spacing: 8
+                        
+                        Label {
+                            text: "• Tiene ventas asociadas en el sistema"
+                            color: "#5D4037"
+                            font.pixelSize: 12
+                        }
+                        
+                        Label {
+                            text: "• Los productos ya fueron vendidos parcial o totalmente"
+                            color: "#5D4037"
+                            font.pixelSize: 12
+                        }
+                        
+                        Label {
+                            text: "• Para modificar, debe eliminar primero las ventas"
+                            color: "#5D4037"
+                            font.pixelSize: 12
+                        }
+                        
+                        Label {
+                            text: "• O crear una nueva compra con los ajustes"
+                            color: "#5D4037"
+                            font.pixelSize: 12
+                        }
+                    }
+                    
+                    Label {
+                        text: "📋 Consejo: Use la opción 'Ver' para revisar las ventas asociadas"
+                        color: "#1976D2"
+                        font.pixelSize: 11
+                        font.italic: true
+                    }
+                }
+            }
+            
+            // Botones
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 12
+                
+                Item { Layout.fillWidth: true }
+                
+                Button {
+                    Layout.preferredWidth: 120
+                    Layout.preferredHeight: 40
+                    text: "Ver Detalle"
+                    
+                    background: Rectangle {
+                        color: parent.pressed ? Qt.darker(blueColor, 1.1) : blueColor
+                        radius: 20
+                    }
+                    
+                    contentItem: Label {
+                        text: parent.text
+                        color: "#FFFFFF"
+                        font.bold: true
+                        font.pixelSize: 13
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    
+                    onClicked: {
+                        if (compraConVentas) {
+                            obtenerDetallesCompra(compraConVentas.id)
+                        }
+                        showVentasWarningDialog = false
+                        compraConVentas = null
+                    }
+                }
+                
+                Button {
+                    Layout.preferredWidth: 120
+                    Layout.preferredHeight: 40
+                    text: "Entendido"
+                    
+                    background: Rectangle {
+                        color: parent.pressed ? "#E0E0E0" : "#F5F5F5"
+                        radius: 20
+                        border.color: "#BDBDBD"
+                        border.width: 1
+                    }
+                    
+                    contentItem: Label {
+                        text: parent.text
+                        color: "#424242"
+                        font.bold: true
+                        font.pixelSize: 13
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    
+                    onClicked: {
+                        showVentasWarningDialog = false
+                        compraConVentas = null
+                    }
+                }
+            }
+        }
+    }
 
     // 🚀 SISTEMA DE NOTIFICACIÓN 
     Rectangle {
@@ -1070,7 +1315,8 @@ Item {
         anchors.bottomMargin: 80
         width: 400
         height: 80
-        color: notificationToast.notificationType === "fifo" ? "#2196F3" : "#27ae60"
+        color: notificationToast.notificationType === "fifo" ? "#2196F3" : 
+               notificationToast.notificationType === "error" ? "#E74C3C" : "#27ae60"
         radius: 12
         visible: false
         opacity: 0
@@ -1106,7 +1352,8 @@ Item {
                 
                 Label {
                     anchors.centerIn: parent
-                    text: notificationToast.notificationType === "fifo" ? "🚀" : "✅"
+                    text: notificationToast.notificationType === "fifo" ? "🚀" : 
+                          notificationToast.notificationType === "error" ? "❌" : "✅"
                     font.pixelSize: 20
                 }
             }

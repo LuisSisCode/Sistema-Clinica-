@@ -852,6 +852,15 @@ class CompraModel(QObject):
             return False
         finally:
             self._set_procesando(False)
+            
+    @Slot(int, result=bool)
+    def verificar_compras_ventas(self, compra_id):
+        """Verifica si una compra tiene ventas asociadas"""
+        try:
+            return self.repo.compra_tiene_ventas(compra_id)
+        except Exception as e:
+            print(f"❌ Error verificando ventas de compra {compra_id}: {e}")
+            return True  # Por seguridad, asumimos que tiene ventas
 
     @Slot(int, result=bool)
     def actualizar_compra(self, proveedor_id: int) -> bool:

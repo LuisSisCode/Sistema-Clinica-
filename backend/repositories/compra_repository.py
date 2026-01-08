@@ -4,6 +4,7 @@ CompraRepository - VERSIÓN 2.0 FIFO SIMPLIFICADA CORREGIDA
 ✅ Sin cálculos de márgenes
 ✅ Soporte para actualizar precio_venta
 ✅ CORRECCIÓN: Elimina duplicación de lotes
+✅ ACTUALIZACIÓN: Actualiza lotes existentes en lugar de crear nuevos
 """
 
 from typing import List, Dict, Any, Optional, Tuple
@@ -215,23 +216,52 @@ class CompraRepository(BaseRepository):
     
     def _crear_lote(self, producto_id: int, cantidad: int, precio_total: float, 
                  vencimiento: str, compra_id: int, fecha_compra: datetime) -> int:
-        """Crea un lote para el producto - GUARDA PRECIO TOTAL, NO UNITARIO"""
+        """Crea un lote para el producto - VERIFICA MEJOR DUPLICADOS"""
         try:
-            print(f"🚀 CREANDO LOTE - Producto: {producto_id}, Cantidad: {cantidad}, Precio TOTAL: {precio_total}")
+            print(f"🚀 CREANDO/VERIFICANDO LOTE - Producto: {producto_id}, Compra: {compra_id}")
             
             # Verificar primero si ya existe un lote para este producto en esta compra
             check_query = """
-            SELECT id 
+            SELECT TOP 1 id, Cantidad_Unitario, Precio_Compra
             FROM Lote 
             WHERE Id_Producto = ? AND Id_Compra = ?
+            ORDER BY Fecha_Creacion DESC
             """
             existing = self._execute_query(check_query, (producto_id, compra_id), fetch_one=True, use_cache=False)
             
             if existing and existing.get('id'):
-                print(f"⚠️  Ya existe un lote (ID: {existing['id']}) para producto {producto_id} en compra {compra_id}")
-                return int(existing['id'])
+                lote_id = int(existing['id'])
+                print(f"✅ Lote existente encontrado: ID {lote_id}")
+                
+                # Verificar si los datos son diferentes
+                cantidad_existente = existing.get('Cantidad_Unitario', 0)
+                precio_existente = existing.get('Precio_Compra', 0)
+                
+                if cantidad_existente != cantidad or precio_existente != precio_total:
+                    print(f"📝 Actualizando lote existente {lote_id} con nuevos datos")
+                    # Actualizar lote existente
+                    update_query = """
+                    UPDATE Lote
+                    SET Cantidad_Unitario = ?,
+                        Precio_Compra = ?,
+                        Fecha_Vencimiento = ?,
+                        Estado = 'Activo'
+                    WHERE id = ?
+                    """
+                    self._execute_query(
+                        update_query,
+                        (cantidad, precio_total, vencimiento, lote_id),
+                        fetch_all=False,
+                        use_cache=False
+                    )
+                    print(f"✅ Lote {lote_id} actualizado")
+                else:
+                    print(f"✅ Lote {lote_id} ya tiene los mismos datos, no se actualiza")
+                
+                return lote_id
             
-            # Insertar sin OUTPUT
+            # Si no existe, crear nuevo
+            print(f"📦 Creando NUEVO lote para producto {producto_id}")
             insert_query = """
             INSERT INTO Lote (
                 Id_Producto, Cantidad_Unitario, Precio_Compra, Fecha_Vencimiento, 
@@ -243,7 +273,7 @@ class CompraRepository(BaseRepository):
             fecha_venc = vencimiento if vencimiento else None
             fecha_comp = fecha_compra.date() if fecha_compra else datetime.now().date()
             
-            # Ejecutar INSERT con precio_total (NO precio_unitario)
+            # Ejecutar INSERT
             self._execute_query(
                 insert_query, 
                 (producto_id, cantidad, precio_total, fecha_venc, fecha_comp, compra_id),
@@ -251,7 +281,7 @@ class CompraRepository(BaseRepository):
                 use_cache=False
             )
             
-            # Obtener el último ID insertado para este producto y compra
+            # Obtener el último ID insertado
             select_query = """
             SELECT TOP 1 id 
             FROM Lote 
@@ -263,35 +293,14 @@ class CompraRepository(BaseRepository):
             
             if result and 'id' in result:
                 lote_id = int(result['id'])
-                print(f"✅ Lote creado correctamente: ID {lote_id} para producto {producto_id}")
-                
-                # Verificar si hay otro lote duplicado reciente (por seguridad)
-                verify_query = """
-                SELECT COUNT(*) as total
-                FROM Lote
-                WHERE Id_Producto = ? AND Id_Compra = ? 
-                AND DATEDIFF(SECOND, Fecha_Creacion, GETDATE()) < 5
-                """
-                verify_result = self._execute_query(verify_query, (producto_id, compra_id), fetch_one=True)
-                
-                if verify_result and verify_result['total'] > 1:
-                    print(f"⚠️  Se encontraron {verify_result['total']} lotes duplicados. Eliminando duplicados...")
-                    # Mantener solo el más reciente
-                    delete_duplicates = """
-                    DELETE FROM Lote
-                    WHERE Id_Producto = ? AND Id_Compra = ? AND id != ?
-                    AND DATEDIFF(SECOND, Fecha_Creacion, GETDATE()) < 5
-                    """
-                    self._execute_query(delete_duplicates, (producto_id, compra_id, lote_id), fetch_all=False, use_cache=False)
-                    print(f"✅ Duplicados eliminados. Manteniendo lote ID: {lote_id}")
-                
+                print(f"✅ NUEVO lote creado: ID {lote_id} para producto {producto_id}")
                 return lote_id
             
             print(f"⚠️ No se pudo obtener ID del lote para producto {producto_id}")
             return None
             
         except Exception as e:
-            print(f"❌ Error creando lote: {e}")
+            print(f"❌ Error creando/actualizando lote: {e}")
             import traceback
             traceback.print_exc()
             return None
@@ -456,13 +465,28 @@ class CompraRepository(BaseRepository):
             'Compra_Mayor': 0.0
         }
     
+    def compra_tiene_ventas(self, compra_id: int) -> bool:
+        """Verifica si una compra tiene ventas asociadas"""
+        try:
+            query = """
+            SELECT COUNT(*) as ventas
+            FROM DetallesVentas dv
+            INNER JOIN Lote l ON dv.Id_Lote = l.id
+            WHERE l.Id_Compra = ?
+            """
+            resultado = self._execute_query(query, (compra_id,), fetch_one=True)
+            return resultado and resultado['ventas'] > 0
+        except Exception as e:
+            print(f"❌ Error verificando ventas de compra {compra_id}: {e}")
+            return True  # Por seguridad, asumimos que tiene ventas
+    
     def eliminar_compra(self, compra_id: int) -> bool:
         """Elimina una compra si no tiene ventas asociadas"""
         try:
             # Verificar si hay ventas de los lotes de esta compra
             query_check = """
             SELECT COUNT(*) as ventas
-            FROM Detalle_Venta dv
+            FROM DetallesVentas dv
             INNER JOIN Lote l ON dv.Id_Lote = l.id
             WHERE l.Id_Compra = ?
             """
@@ -728,7 +752,7 @@ class CompraRepository(BaseRepository):
 
     def actualizar_compra(self, compra_id: int, proveedor_id: int, usuario_id: int, items: List[Dict[str, Any]]) -> bool:
         """
-        Actualiza una compra existente - MÉTODO NUEVO PARA EDICIÓN
+        Actualiza una compra existente - ACTUALIZA LOTES EXISTENTES EN LUGAR DE CREAR NUEVOS
         """
         try:
             print(f"✏️ Actualizando compra existente - ID: {compra_id}")
@@ -736,7 +760,7 @@ class CompraRepository(BaseRepository):
             # 1. Verificar si hay ventas de los lotes de esta compra
             query_check = """
             SELECT COUNT(*) as ventas
-            FROM Detalle_Venta dv
+            FROM DetallesVentas dv
             INNER JOIN Lote l ON dv.Id_Lote = l.id
             WHERE l.Id_Compra = ?
             """
@@ -755,16 +779,16 @@ class CompraRepository(BaseRepository):
             if not compra_actual:
                 raise CompraError(f"Compra {compra_id} no encontrada")
             
-            # 3. Eliminar detalles y lotes existentes
-            print(f"🗑️ Eliminando detalles y lotes de compra {compra_id}")
+            # 3. Obtener lotes existentes de esta compra
+            lotes_existentes = self._obtener_lotes_por_compra(compra_id)
+            print(f"📦 Lotes existentes en compra {compra_id}: {len(lotes_existentes)} lotes")
             
-            query_delete_lotes = "DELETE FROM Lote WHERE Id_Compra = ?"
-            self._execute_query(query_delete_lotes, (compra_id,), fetch_all=False, use_cache=False)
-            
+            # 4. Eliminar detalles de la compra (siempre)
+            print(f"🗑️ Eliminando detalles de compra {compra_id}")
             query_delete_detalles = "DELETE FROM DetalleCompra WHERE Id_Compra = ?"
             self._execute_query(query_delete_detalles, (compra_id,), fetch_all=False, use_cache=False)
             
-            # 4. Actualizar datos básicos de la compra
+            # 5. Actualizar datos básicos de la compra
             query_update_compra = """
             UPDATE Compra 
             SET Id_Proveedor = ?, Id_Usuario = ?, Fecha = GETDATE()
@@ -780,8 +804,8 @@ class CompraRepository(BaseRepository):
             total_compra = 0.0
             fecha_actual = datetime.now()
             
-            # 5. Procesar cada item (similar a crear_compra)
-            for item in items:
+            # 6. Procesar cada item
+            for i, item in enumerate(items):
                 producto_codigo = item.get('producto_codigo')
                 cantidad = item.get('cantidad')
                 precio_total = item.get('precio_total')
@@ -801,28 +825,41 @@ class CompraRepository(BaseRepository):
                 
                 # Calcular precio unitario
                 precio_unitario = precio_total / cantidad if cantidad > 0 else 0
-                print(f"📊 Actualización - Producto: {producto_codigo}, Cantidad: {cantidad}, Precio TOTAL: {precio_total}")
+                print(f"📊 Actualización {i+1}/{len(items)} - Producto: {producto_codigo}, Cantidad: {cantidad}, Precio TOTAL: {precio_total}")
                 
-                # 6. Actualizar precio de compra en la tabla Productos
+                # 7. Actualizar precio de compra en la tabla Productos
                 self._actualizar_precio_compra_producto(producto_id, precio_unitario)
                 
-                # 7. Crear lote con precio TOTAL
-                lote_id = self._crear_lote(
-                    producto_id=producto_id,
-                    cantidad=cantidad,
-                    precio_total=precio_total,
-                    vencimiento=vencimiento,
-                    compra_id=compra_id,
-                    fecha_compra=fecha_actual
-                )
+                # 8. Verificar si ya existe un lote para este producto en esta compra
+                lote_existente = self._obtener_lote_por_producto_y_compra(producto_id, compra_id)
                 
-                if not lote_id:
-                    print(f"❌ ERROR: No se pudo crear lote para {producto_codigo}")
-                    continue
+                if lote_existente:
+                    # ✅ ACTUALIZAR LOTE EXISTENTE
+                    lote_id = lote_existente['id']
+                    print(f"✏️ Actualizando lote existente ID {lote_id} para producto {producto_codigo}")
+                    
+                    self._actualizar_lote(
+                        lote_id=lote_id,
+                        cantidad=cantidad,
+                        precio_total=precio_total,
+                        vencimiento=vencimiento
+                    )
+                    
+                    print(f"✅ Lote {lote_id} actualizado: cantidad={cantidad}, precio_total={precio_total}")
+                else:
+                    # ❌ Si no existe lote, crear uno nuevo (caso raro, pero puede pasar)
+                    print(f"⚠️ No se encontró lote para producto {producto_codigo} en compra {compra_id}")
+                    lote_id = self._crear_lote(
+                        producto_id=producto_id,
+                        cantidad=cantidad,
+                        precio_total=precio_total,
+                        vencimiento=vencimiento,
+                        compra_id=compra_id,
+                        fecha_compra=fecha_actual
+                    )
+                    print(f"📦 Nuevo lote creado: ID {lote_id} para {producto_codigo}")
                 
-                print(f"📦 Lote actualizado: ID {lote_id} para {producto_codigo}")
-                
-                # 8. Crear detalle de compra con precio unitario
+                # 9. Crear detalle de compra
                 self._crear_detalle_compra(
                     compra_id=compra_id,
                     producto_id=producto_id,
@@ -830,17 +867,20 @@ class CompraRepository(BaseRepository):
                     precio_unitario=precio_unitario
                 )
                 
-                # 9. Si hay precio de venta, actualizar producto
+                # 10. Si hay precio de venta, actualizar producto
                 if precio_venta and float(precio_venta) > 0:
                     self._actualizar_precio_venta_producto(producto_id, float(precio_venta))
                     print(f"💰 Precio venta actualizado: {producto_codigo} = Bs {precio_venta:.2f}")
                 
                 total_compra += precio_total
             
-            # 10. Actualizar total de compra
+            # 11. Eliminar lotes de productos que ya no están en la compra
+            self._eliminar_lotes_sin_productos(compra_id, items)
+            
+            # 12. Actualizar total de compra
             self._actualizar_total_compra(compra_id, total_compra)
             
-            # 11. Verificar y corregir lotes
+            # 13. Verificar y corregir lotes
             self.verificar_y_corregir_lotes(compra_id)
             self.verificar_y_eliminar_lotes_duplicados(compra_id)
             
@@ -852,3 +892,69 @@ class CompraRepository(BaseRepository):
             import traceback
             traceback.print_exc()
             raise CompraError(f"Error al actualizar compra: {str(e)}")
+
+    def _obtener_lotes_por_compra(self, compra_id: int) -> List[Dict[str, Any]]:
+        """Obtiene todos los lotes de una compra"""
+        query = """
+        SELECT l.*, p.Codigo, p.Nombre
+        FROM Lote l
+        INNER JOIN Productos p ON l.Id_Producto = p.id
+        WHERE l.Id_Compra = ?
+        ORDER BY l.Id_Producto
+        """
+        return self._execute_query(query, (compra_id,), use_cache=False)
+
+    def _obtener_lote_por_producto_y_compra(self, producto_id: int, compra_id: int) -> Optional[Dict[str, Any]]:
+        """Obtiene un lote específico por producto y compra"""
+        query = """
+        SELECT TOP 1 *
+        FROM Lote
+        WHERE Id_Producto = ? AND Id_Compra = ?
+        ORDER BY id
+        """
+        return self._execute_query(query, (producto_id, compra_id), fetch_one=True, use_cache=False)
+
+    def _actualizar_lote(self, lote_id: int, cantidad: int, precio_total: float, vencimiento: str = None):
+        """Actualiza un lote existente"""
+        query = """
+        UPDATE Lote 
+        SET Cantidad_Unitario = ?, 
+            Precio_Compra = ?, 
+            Fecha_Vencimiento = ?,
+            Estado = 'Activo'
+        WHERE id = ?
+        """
+        self._execute_query(query, (cantidad, precio_total, vencimiento, lote_id), fetch_all=False, use_cache=False)
+
+    def _eliminar_lotes_sin_productos(self, compra_id: int, items_actualizados: List[Dict[str, Any]]):
+        """Elimina lotes de productos que ya no están en la compra actualizada"""
+        try:
+            # Obtener IDs de productos en la compra actualizada
+            producto_ids = []
+            for item in items_actualizados:
+                producto_codigo = item.get('producto_codigo')
+                producto = self.producto_repo.get_by_codigo(producto_codigo)
+                if producto:
+                    producto_ids.append(producto.get('id'))
+            
+            if not producto_ids:
+                print("⚠️ No hay productos en la compra actualizada")
+                return
+            
+            # Eliminar lotes que no están en la lista actualizada
+            placeholders = ','.join(['?' for _ in producto_ids])
+            query = f"""
+            DELETE FROM Lote
+            WHERE Id_Compra = ? 
+            AND Id_Producto NOT IN ({placeholders})
+            """
+            params = [compra_id] + producto_ids
+            
+            eliminados = self._execute_non_query(query, tuple(params))
+            if eliminados:
+                print(f"🗑️ Eliminados {eliminados} lotes de productos que ya no están en la compra")
+            else:
+                print("✅ No hay lotes para eliminar")
+                
+        except Exception as e:
+            print(f"❌ Error eliminando lotes sin productos: {e}")
