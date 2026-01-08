@@ -1360,13 +1360,12 @@ Item {
                                                     border.width: 1
                                                 }
                                                 
-                                                contentItem: Image {
-                                                    source: "Resources/iconos/editar.svg"
-                                                    sourceSize.width: 20
-                                                    sourceSize.height: 20
-                                                    fillMode: Image.PreserveAspectFit
+                                                contentItem: Text {
+                                                    text: "✎" // O "Editar", "E", etc.
+                                                    font.pixelSize: 16
+                                                    font.bold: true
                                                     anchors.centerIn: parent
-
+                                                    color: "blue" // O tu color preferido
                                                 }
                                                 
                                                 onClicked: {
@@ -1424,12 +1423,12 @@ Item {
                                                     border.width: 1
                                                 }
                                                 
-                                                contentItem: Image {
-                                                    source: "Resources/iconos/eliminar.svg"
-                                                    sourceSize.width: 20  // ✅ AUMENTADO
-                                                    sourceSize.height: 20  // ✅ AUMENTADO
-                                                    fillMode: Image.PreserveAspectFit
+                                                contentItem: Text {
+                                                    text: "X" // Icono de eliminar de FontAwesome
+                                                    font.family: "FontAwesome"
+                                                    font.pixelSize: 16  // ✅ AUMENTADO
                                                     anchors.centerIn: parent
+                                                    color: "red"
                                                 }
                                                 
                                                 onClicked: {
