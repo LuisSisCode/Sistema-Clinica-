@@ -6,6 +6,7 @@ CompraModel - VERSIÓN 2.0 SIMPLIFICADA CORREGIDA
    - agregar_producto_a_compra
 ✅ Sin márgenes, precio total
 ✅ Actualización de precio_venta
+✅ Compatible con repositorio corregido
 """
 
 from PySide6.QtCore import QObject, Signal, Slot, Property, QTimer, Qt
@@ -47,9 +48,8 @@ class CompraModel(QObject):
     proveedorCompraCompletada = Signal(int, float)
     proveedorDatosActualizados = Signal()
     filtrosChanged = Signal()
-
-    # Signal asociada (agregar arriba con los otros signals)
     compraDetalleChanged = Signal()
+    compraEliminada = Signal(int) 
     
     def __init__(self):
         super().__init__()
@@ -74,13 +74,14 @@ class CompraModel(QObject):
         self._items_originales = []
         self._usuario_actual_id = 0
         self._proveedor_seleccionado = 0
+        self._compra_id_edicion = 0
         
         # Timer para actualización automática
         self.update_timer = QTimer()
         self.update_timer.timeout.connect(self._auto_update_compras)
         self.update_timer.start(120000)  # 2 minutos
 
-        # Variable interna (agregar en __init__)
+        # Variable interna
         self._compra_actual = {}
         
         # Cargar datos iniciales
@@ -190,6 +191,10 @@ class CompraModel(QObject):
         """Compra actualmente seleccionada con sus detalles"""
         return self._compra_actual
     
+    @Property(int, notify=modoEdicionChanged)
+    def compra_id_edicion(self):
+        return self._compra_id_edicion
+    
     # ===============================
     # MÉTODOS DE CARGA DE DATOS
     # ===============================
@@ -290,7 +295,6 @@ class CompraModel(QObject):
             print(f"❌ Error en búsqueda: {e}")
             return []
     
-    # En compra_model.py, modificar el método obtener_datos_precio_producto:
     @Slot(str, result='QVariantMap')
     def obtener_datos_precio_producto(self, codigo_o_id: str):
         """Obtiene datos de precio del producto por código o ID"""
@@ -458,30 +462,47 @@ class CompraModel(QObject):
     
     @Slot(int, 'QVariantMap', result=bool)
     def actualizar_item_compra(self, index: int, datos_lote: Dict):
-        """Actualiza un item de la compra"""
+        """Actualiza un item de la compra - CORREGIDO para manejar precio_venta"""
         try:
+            print(f"✏️ Actualizando item {index} con datos: {datos_lote}")
+            
             if 0 <= index < len(self._items_compra):
                 item = self._items_compra[index]
                 
-                # Actualizar datos
+                # Actualizar datos básicos
                 cantidad = int(datos_lote.get('Cantidad_Unitario', item.get('cantidad', 0)))
                 precio_total = float(datos_lote.get('Precio_Compra', item.get('precio_total', 0)))
                 vencimiento = datos_lote.get('Vencimiento', item.get('vencimiento'))
                 
+                # ✅ OBTENER PRECIO VENTA (IMPORTANTE)
+                precio_venta = datos_lote.get('Precio_Venta')
+                if precio_venta is not None:
+                    precio_venta = float(precio_venta)
+                    print(f"💰 Precio venta recibido para actualización: {precio_venta}")
+                
                 precio_unitario = precio_total / cantidad if cantidad > 0 else 0
                 
+                # Actualizar el item
                 item['cantidad'] = cantidad
                 item['precio_unitario'] = precio_unitario
                 item['precio_total'] = precio_total
                 item['vencimiento'] = vencimiento if vencimiento else "Sin vencimiento"
                 item['subtotal'] = precio_total
                 
+                # ✅ ACTUALIZAR PRECIO VENTA SI SE PROVEE
+                if precio_venta is not None:
+                    item['precio_venta'] = precio_venta
+                    print(f"✅ Precio venta actualizado en item: {precio_venta}")
+                
+                print(f"✅ Item {index} actualizado: {item}")
                 self.itemsCompraCambiado.emit()
                 self.operacionExitosa.emit("Producto actualizado")
                 return True
             return False
         except Exception as e:
             print(f"❌ Error actualizando item: {e}")
+            import traceback
+            traceback.print_exc()
             return False
     
     # ===============================
@@ -643,6 +664,272 @@ class CompraModel(QObject):
         except Exception as e:
             print(f"❌ Error en verificarProductoTieneVencimiento: {e}")
             return None
+        
+    # ===============================
+    # ELIMINAR COMPRA
+    # ===============================
+    @Slot(int, result=bool)
+    def eliminar_compra(self, compra_id: int) -> bool:
+        """Elimina una compra (solo si no tiene ventas asociadas)"""
+        if not self._verificar_autenticacion():
+            return False
+        
+        self._set_procesando(True)
+        
+        try:
+            # Llamar al repositorio para eliminar la compra
+            success = safe_execute(
+                lambda: self.compra_repo.eliminar_compra(compra_id)
+            )
+            
+            if success:
+                # Actualizar listas
+                self._cargar_compras_recientes()
+                self._cargar_estadisticas()
+                
+                self.operacionExitosa.emit(f"Compra {compra_id} eliminada correctamente")
+                print(f"🗑️ Compra {compra_id} eliminada desde QML")
+                return True
+            else:
+                self.operacionError.emit(f"No se pudo eliminar la compra {compra_id}")
+                return False
+                
+        except Exception as e:
+            error_msg = f"Error al eliminar compra: {str(e)}"
+            print(f"❌ {error_msg}")
+            self.operacionError.emit(error_msg)
+            return False
+        finally:
+            self._set_procesando(False)
+
+    # ===============================
+    # EDICIÓN DE COMPRAS
+    # ===============================
+    @Slot(int, result=bool)
+    def cargar_compra_para_edicion(self, compra_id: int) -> bool:
+        """Carga una compra existente para editarla - MEJORADO"""
+        try:
+            print(f"📋 Cargando compra {compra_id} para edición")
+            
+            # Limpiar items actuales
+            self._items_compra = []
+            
+            # Obtener datos de la compra
+            compra = self.compra_repo.get_compra_completa(compra_id)
+            if not compra:
+                self.operacionError.emit(f"Compra {compra_id} no encontrada")
+                return False
+            
+            # Establecer modo edición
+            self._modo_edicion = True
+            self._compra_id_edicion = compra_id
+            self._datos_originales = compra
+            
+            # Cargar proveedor
+            if 'Id_Proveedor' in compra:
+                self._proveedor_seleccionado = compra.get('Id_Proveedor', 0)
+            
+            # Cargar items de la compra
+            detalles = compra.get('detalles', [])
+            for detalle in detalles:
+                # Formatear item para el modelo
+                item = {
+                    "codigo": detalle.get('Producto_Codigo', ''),
+                    "nombre": detalle.get('Producto_Nombre', ''),
+                    "cantidad": detalle.get('Cantidad_Total', 0),
+                    "precio_unitario": detalle.get('Precio_Unitario_Compra', 0),
+                    "precio_total": detalle.get('Costo_Total', 0),
+                    "precio_venta": detalle.get('Precio_Venta_Actual', 0),
+                    "vencimiento": detalle.get('Fecha_Vencimiento', 'Sin vencimiento'),
+                    "subtotal": detalle.get('Costo_Total', 0)
+                }
+                self._items_compra.append(item)
+            
+            # Emitir señales
+            self.itemsCompraCambiado.emit()
+            self.modoEdicionChanged.emit()
+            self.datosOriginalesChanged.emit()
+            
+            print(f"✅ Compra {compra_id} cargada para edición: {len(detalles)} productos")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Error cargando compra para edición: {e}")
+            self.operacionError.emit(f"Error cargando compra: {str(e)}")
+            return False
+
+    @Slot(result=bool)
+    def cancelar_edicion(self):
+        """Cancela el modo de edición"""
+        self._modo_edicion = False
+        self._compra_id_edicion = 0
+        self._datos_originales = {}
+        self.limpiar_items()
+        self.modoEdicionChanged.emit()
+        self.datosOriginalesChanged.emit()
+        print("❌ Edición cancelada")
+        return True
+
+    @Slot(int, result=bool)
+    def actualizar_compra(self, proveedor_id: int) -> bool:
+        """Actualiza una compra existente"""
+        if not self._verificar_autenticacion():
+            return False
+        
+        if not self._modo_edicion or self._compra_id_edicion <= 0:
+            self.operacionError.emit("No hay compra en modo edición")
+            return False
+        
+        if not self._items_compra:
+            self.operacionError.emit("No hay productos en la compra")
+            return False
+        
+        if proveedor_id <= 0:
+            self.operacionError.emit("Debe seleccionar un proveedor")
+            return False
+        
+        self._set_procesando(True)
+        
+        try:
+            # Preparar items para actualización
+            items_repo = []
+            for item in self._items_compra:
+                item_repo = {
+                    "producto_codigo": item['codigo'],
+                    "cantidad": item['cantidad'],
+                    "precio_total": item['precio_total'],
+                    "vencimiento": item.get('vencimiento') if item.get('vencimiento') != "Sin vencimiento" else None
+                }
+                
+                # Si hay precio de venta, agregarlo
+                if 'precio_venta' in item and item['precio_venta'] > 0:
+                    item_repo['precio_venta'] = item['precio_venta']
+                
+                items_repo.append(item_repo)
+            
+            # Aquí necesitaríamos un método en el repositorio para actualizar compras
+            # Por ahora, vamos a crear uno nuevo y eliminar el antiguo
+            # Esto es temporal hasta que implementemos la actualización completa
+            
+            # Crear nueva compra
+            nueva_compra_id = safe_execute(
+                lambda: self.compra_repo.crear_compra(
+                    proveedor_id=proveedor_id,
+                    usuario_id=self._usuario_actual_id,
+                    items=items_repo
+                )
+            )
+            
+            if nueva_compra_id:
+                # Eliminar la compra anterior
+                exito_eliminar = safe_execute(
+                    lambda: self.compra_repo.eliminar_compra(self._compra_id_edicion)
+                )
+                
+                if exito_eliminar:
+                    total = self.total_compra_actual
+                    self.limpiar_items()
+                    self._cargar_compras_recientes()
+                    self._cargar_estadisticas()
+                    
+                    # Resetear modo edición
+                    self._modo_edicion = False
+                    self._compra_id_edicion = 0
+                    self._datos_originales = {}
+                    
+                    self.compraActualizada.emit(nueva_compra_id, total)
+                    self.operacionExitosa.emit(f"Compra actualizada exitosamente (Nueva ID: {nueva_compra_id})")
+                    print(f"✅ Compra actualizada: Antigua ID {self._compra_id_edicion} → Nueva ID {nueva_compra_id}")
+                    return True
+            
+            self.operacionError.emit("Error al actualizar la compra")
+            return False
+            
+        except Exception as e:
+            error_msg = f"Error actualizando compra: {str(e)}"
+            print(f"❌ {error_msg}")
+            self.operacionError.emit(error_msg)
+            return False
+        finally:
+            self._set_procesando(False)
+
+    @Slot(int, result=bool)
+    def actualizar_compra(self, proveedor_id: int) -> bool:
+        """Actualiza una compra existente - MÉTODO CORREGIDO"""
+        if not self._verificar_autenticacion():
+            return False
+        
+        if not self._modo_edicion or self._compra_id_edicion <= 0:
+            self.operacionError.emit("No hay compra en modo edición")
+            return False
+        
+        if not self._items_compra:
+            self.operacionError.emit("No hay productos en la compra")
+            return False
+        
+        if proveedor_id <= 0:
+            self.operacionError.emit("Debe seleccionar un proveedor")
+            return False
+        
+        self._set_procesando(True)
+        
+        try:
+            # Preparar items para actualización
+            items_repo = []
+            for item in self._items_compra:
+                item_repo = {
+                    "producto_codigo": item['codigo'],
+                    "cantidad": item['cantidad'],
+                    "precio_total": item['precio_total'],
+                    "vencimiento": item.get('vencimiento') if item.get('vencimiento') != "Sin vencimiento" else None
+                }
+                
+                # Si hay precio de venta, agregarlo
+                if 'precio_venta' in item and item['precio_venta'] > 0:
+                    item_repo['precio_venta'] = item['precio_venta']
+                
+                items_repo.append(item_repo)
+            
+            # Usar el NUEVO método de actualización del repositorio
+            exito = safe_execute(
+                lambda: self.compra_repo.actualizar_compra(
+                    compra_id=self._compra_id_edicion,
+                    proveedor_id=proveedor_id,
+                    usuario_id=self._usuario_actual_id,
+                    items=items_repo
+                )
+            )
+            
+            if exito:
+                total = self.total_compra_actual
+                
+                # Resetear modo edición
+                self._modo_edicion = False
+                self._compra_id_edicion = 0
+                self._datos_originales = {}
+                self.limpiar_items()
+                
+                # Actualizar listas
+                self._cargar_compras_recientes()
+                self._cargar_estadisticas()
+                
+                # Emitir señales
+                self.compraActualizada.emit(self._compra_id_edicion, total)
+                self.operacionExitosa.emit(f"Compra actualizada exitosamente")
+                
+                print(f"✅ Compra actualizada: ID {self._compra_id_edicion}")
+                return True
+            
+            self.operacionError.emit("Error al actualizar la compra")
+            return False
+            
+        except Exception as e:
+            error_msg = f"Error actualizando compra: {str(e)}"
+            print(f"❌ {error_msg}")
+            self.operacionError.emit(error_msg)
+            return False
+        finally:
+            self._set_procesando(False)
 
 def register_compra_model():
     """Registra el modelo para uso en QML"""

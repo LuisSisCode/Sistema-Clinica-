@@ -5,408 +5,423 @@ import QtQuick.Controls.Material 2.15
 
 // Con DetalleProducto.qml como modal de detalle
 Item {
-id: productosRoot
-// Referencia al módulo principal de farmacia
-property var farmaciaData: parent.farmaciaData
-property var inventarioModel: parent.inventarioModel
+    id: productosRoot
+    // Referencia al módulo principal de farmacia
+    property var farmaciaData: parent.farmaciaData
+    property var inventarioModel: parent.inventarioModel
 
-// ESTADO PRINCIPAL: controla qué vista mostrar
-// ❌ DESHABILITADO EN V2.0 - Productos se crean solo en Compras
-property bool modoEdicionProducto: false
-property var productoParaEditar: null
-property var selectedProduct: null
+    // ESTADO PRINCIPAL: controla qué vista mostrar
+    // ❌ DESHABILITADO EN V2.0 - Productos se crean solo en Compras
+    property bool modoEdicionProducto: false
+    property var productoParaEditar: null
+    property var selectedProduct: null
 
-// Estados del diálogo y funcionalidades
-property bool editarPrecioDialogOpen: false
-property var productoSeleccionado: null
-property int currentFilter: 0
-property string searchText: ""
-property var productosOriginales: []
-property var fechaActual: new Date()
+    // Estados del diálogo y funcionalidades
+    property bool editarPrecioDialogOpen: false
+    property var productoSeleccionado: null
+    property int currentFilter: 0
+    property string searchText: ""
+    property var productosOriginales: []
+    property var fechaActual: new Date()
 
-// Propiedades de paginación
-property int itemsPerPage: 10
-property int currentPage: 0
-property int totalPages: 0
-property var allFilteredProducts: []
+    // Propiedades de paginación
+    property int itemsPerPage: 10
+    property int currentPage: 0
+    property int totalPages: 0
+    property var allFilteredProducts: []
 
-// NUEVO: Modal de detalle de producto FIFO 2.0
-property bool mostrandoDetalleProducto: false
-property var productoParaDetalle: null
+    // NUEVO: Modal de detalle de producto FIFO 2.0
+    property bool mostrandoDetalleProducto: false
+    property var productoParaDetalle: null
 
-// PROPIEDADES PARA MODALES
-property bool mostrandoEditarLote: false
-property var loteParaEditar: null
+    // PROPIEDADES PARA MODALES
+    property bool mostrandoEditarLote: false
+    property var loteParaEditar: null
 
-// MARCAS
-property var marcasModel: []
+    // MARCAS
+    property var marcasModel: []
 
-// ✅ NUEVO FIFO 2.0: MAPA DE STOCK PRECALCULADO (evita binding loops)
-property var mapaStock: ({})
-property bool stockCalculado: false
+    // ✅ NUEVO FIFO 2.0: MAPA DE STOCK PRECALCULADO (evita binding loops)
+    property var mapaStock: ({})
+    property bool stockCalculado: false
 
-property bool marcasCargando: false
-property bool marcasYaCargadas: false
+    property bool marcasCargando: false
+    property bool marcasYaCargadas: false
 
-// DATOS DE LOTES - SIN CAJAS
-property var lotesProximosVencer: []
-property var lotesVencidos: []
-property var productosConLotesBajoStock: []
-property bool datosLotesCargados: false
+    // DATOS DE LOTES - SIN CAJAS
+    property var lotesProximosVencer: []
+    property var lotesVencidos: []
+    property var productosConLotesBajoStock: []
+    property bool datosLotesCargados: false
 
-// 🆕 V2.0: Confirmación de eliminación
-property var productoParaEliminar: null
-property bool confirmDialogVisible: false
-property string confirmDialogTitle: ""
-property string confirmDialogMessage: ""
-property string confirmDialogAccion: ""
+    // 🆕 V2.0: Confirmación de eliminación
+    property var productoParaEliminar: null
+    property bool confirmDialogVisible: false
+    property string confirmDialogTitle: ""
+    property string confirmDialogMessage: ""
+    property string confirmDialogAccion: ""
 
-// 🔧 NUEVO: Propiedades para menú contextual
-property bool mostrandoMenuContextual: false
-property var productoMenuContextual: null
+    // 🔧 NUEVO: Propiedades para menú contextual
+    property bool mostrandoMenuContextual: false
+    property var productoMenuContextual: null
 
-// Propiedades de colores
-readonly property color primaryColor: "#273746"
-readonly property color primaryDarkColor: "#34495E"
-readonly property color successColor: "#27ae60"
-readonly property color dangerColor: "#E74C3C"
-readonly property color warningColor: "#f39c12"
-readonly property color lightGrayColor: "#ECF0F1"
-readonly property color darkGrayColor: "#7f8c8d"
-readonly property color textColor: "#2c3e50"
-readonly property color whiteColor: "#FFFFFF"
-readonly property color blueColor: "#3498db"
+    // Propiedades de colores
+    readonly property color primaryColor: "#273746"
+    readonly property color primaryDarkColor: "#34495E"
+    readonly property color successColor: "#27ae60"
+    readonly property color dangerColor: "#E74C3C"
+    readonly property color warningColor: "#f39c12"
+    readonly property color lightGrayColor: "#ECF0F1"
+    readonly property color darkGrayColor: "#7f8c8d"
+    readonly property color textColor: "#2c3e50"
+    readonly property color whiteColor: "#FFFFFF"
+    readonly property color blueColor: "#3498db"
 
-property color grayMedium: "#7f8c8d"
+    property color grayMedium: "#7f8c8d"
 
-// ✅ FIFO 2.0: Colores de estado de stock
-readonly property color stockNormalColor: '#2fb32f'    // Verde
-readonly property color stockBajoColor: "#FFB444"      // Naranja
-readonly property color stockCriticoColor: "#FF4444"   // Rojo
+    // ✅ FIFO 2.0: Colores de estado de stock
+    readonly property color stockNormalColor: '#2fb32f'    // Verde
+    readonly property color stockBajoColor: "#FFB444"      // Naranja
+    readonly property color stockCriticoColor: "#FF4444"   // Rojo
 
-property bool _actualizandoDatos: false
-property bool _refreshPending: false  // ✅ NUEVO: Para manejar actualizaciones diferidas
-property bool _bloqueandoActualizacion: false  // ✅ NUEVO: Para prevenir ciclos infinitos
+    property bool _actualizandoDatos: false
+    property bool _refreshPending: false  // ✅ NUEVO: Para manejar actualizaciones diferidas
+    property bool _bloqueandoActualizacion: false  // ✅ NUEVO: Para prevenir ciclos infinitos
 
-// ===== CONEXIONES =====
-Connections {
-    target: inventarioModel
-    function onProductosChanged() {
-        if (_actualizandoDatos) {
-            console.log("⚠️ Ya hay actualización en curso, ignorando signal duplicado")
+    // ===== CONEXIONES =====
+    Connections {
+        target: inventarioModel
+        function onProductosChanged() {
+            if (_actualizandoDatos) {
+                console.log("⚠️ Ya hay actualización en curso, ignorando signal duplicado")
+                return
+            }
+            
+            console.log("🔄 Productos actualizados desde BD - Programando actualización...")
+            _refreshPending = true
+            
+            // Force a hard reset when products change
+            productosOriginales = []
+            
+            if (!refreshTimer.running) {
+                refreshTimer.restart()
+            }
+        }
+    }
+
+    // ✅ Timer para actualizaciones diferidas (evita ciclos infinitos)
+    Timer {
+        id: refreshTimer
+        interval: 500  // Reduced from 1000ms for faster response
+        onTriggered: {
+            if (_refreshPending) {
+                _actualizandoDatos = true
+                console.log("🔄 Ejecutando actualización retardada...")
+                
+                // Clear current data
+                productosOriginales = []
+                
+                // Get fresh data
+                if (farmaciaData) {
+                    var productos = farmaciaData.obtenerProductosParaInventario()
+                    console.log("📦 Productos frescos obtenidos:", productos.length)
+                    
+                    // Deep copy
+                    var nuevosProductos = []
+                    for (var i = 0; i < productos.length; i++) {
+                        nuevosProductos.push(JSON.parse(JSON.stringify(productos[i])))
+                    }
+                    
+                    productosOriginales = nuevosProductos
+                }
+                
+                // Update everything
+                cargarDatosParaFiltros()
+                precalcularStock()
+                updateFilteredModel()
+                
+                console.log("✅ Interfaz actualizada con", productosOriginales.length, "productos")
+                
+                _refreshPending = false
+                _actualizandoDatos = false
+            }
+        }
+    }
+
+    focus: true
+    Keys.onEscapePressed: {
+        console.log("Tecla Escape presionada en Productos.qml")
+        
+        if (modoEdicionProducto) {
+            console.log("Cerrando EditarProducto con Escape")
+            cerrarEditarProducto()
+        } else if (mostrandoDetalleProducto) {
+            console.log("Cerrando detalle de producto con Escape")
+            cerrarDetalleProducto()
+        } else if (editarPrecioDialogOpen) {
+            console.log("Cerrando diálogo de precio con Escape")
+            editarPrecioDialogOpen = false
+        } else if (mostrandoEditarLote) {
+            console.log("Cerrando editar lote con Escape")
+            mostrandoEditarLote = false
+            loteParaEditar = null
+        } else if (confirmDialogVisible) {
+            console.log("Cerrando diálogo de confirmación con Escape")
+            confirmDialogVisible = false
+        } else if (mostrandoMenuContextual) {
+            console.log("Cerrando menú contextual con Escape")
+            mostrandoMenuContextual = false
+        }
+    }
+
+    // MODELO PAGINADO
+    ListModel {
+        id: productosPaginadosModel
+    }
+
+    function cargarDatosParaFiltros() {
+        if (!inventarioModel) {
+            console.log("❌ InventarioModel no disponible para filtros")
+            datosLotesCargados = false
             return
         }
         
-        console.log("🔄 Productos actualizados desde BD - Programando actualización...")
-        _refreshPending = true
+        console.log("🔄 Cargando datos para filtros desde InventarioModel...")
         
-        if (!refreshTimer.running) {
-            refreshTimer.restart()
-        }
-    }
-}
-
-// ✅ Timer para actualizaciones diferidas (evita ciclos infinitos)
-Timer {
-    id: refreshTimer
-    interval: 1000
-    onTriggered: {
-        if (_refreshPending) {
-            _actualizandoDatos = true
-            console.log("🔄 Ejecutando actualización retardada...")
-            
-            // ✅ PRESERVAR el CÓDIGO del producto, no la referencia al objeto
-            var codigoProductoActual = null
-            if (mostrandoDetalleProducto && productoParaDetalle) {
-                codigoProductoActual = productoParaDetalle.codigo
-                console.log("💾 Guardando código de producto:", codigoProductoActual)
+        try {
+            // Cargar lotes próximos a vencer
+            if (typeof inventarioModel.get_lotes_por_vencer === 'function') {
+                var proximosVencer = inventarioModel.get_lotes_por_vencer(60)
+                lotesProximosVencer = proximosVencer || []
+                console.log("📅 Lotes próximos a vencer:", lotesProximosVencer.length)
+            } else {
+                console.log("⚠️ Método get_lotes_por_vencer no disponible")
+                lotesProximosVencer = []
             }
             
-            Qt.callLater(function() {
-                cargarDatosParaFiltros()
-                actualizarDesdeDataCentral()
+            // Cargar lotes vencidos
+            if (typeof inventarioModel.get_lotes_vencidos === 'function') {
+                var vencidos = inventarioModel.get_lotes_vencidos()
+                lotesVencidos = vencidos || []
+                console.log("⚠️ Lotes vencidos:", lotesVencidos.length)
+            } else {
+                console.log("⚠️ Método get_lotes_vencidos no disponible")
+                lotesVencidos = []
+            }
+            
+            // Cargar productos bajo stock
+            if (typeof inventarioModel.get_productos_bajo_stock === 'function') {
+                var bajoStock = inventarioModel.get_productos_bajo_stock(10)
+                productosConLotesBajoStock = bajoStock || []
+                console.log("📊 Productos bajo stock:", productosConLotesBajoStock.length)
+            } else {
+                console.log("⚠️ Método get_productos_bajo_stock no disponible")
+                productosConLotesBajoStock = []
+            }
+            
+            datosLotesCargados = true
+            console.log("✅ Datos de filtros cargados exitosamente")
+            
+        } catch (error) {
+            console.log("❌ Error cargando datos para filtros:", error)
+            lotesProximosVencer = []
+            lotesVencidos = []
+            productosConLotesBajoStock = []
+            datosLotesCargados = false
+        }
+    }
+
+    // ========================================
+    // 🆕 FUNCIONES V2.0 - EDITAR Y ELIMINAR
+    // ========================================
+
+    function abrirEditarProducto(producto) {
+        console.log("✏️ Abriendo edición de producto ID:", producto.id, "Código:", producto.codigo)
+        
+        // ✅ DEBUG: Verificar unidad de medida original
+        console.log("🔍 Unidad de medida original en producto:", producto.unidadMedida, producto.unidad_medida)
+        
+        if (!marcasYaCargadas) {
+            cargarMarcasDesdeModel()
+        }
+        
+        // ✅ USAR EL NUEVO MÉTODO ESPECIALIZADO
+        if (inventarioModel && typeof inventarioModel.get_producto_para_edicion === 'function') {
+            console.log("🔍 Llamando a get_producto_para_edicion...")
+            var productoCompleto = inventarioModel.get_producto_para_edicion(producto.id)
+            
+            if (!productoCompleto || Object.keys(productoCompleto).length === 0) {
+                console.error("❌ No se pudo obtener datos completos del producto")
+                mostrarMensajeError("No se pudo cargar los datos del producto")
+                return
+            }
+            
+            console.log("📊 Datos COMPLETOS obtenidos para edición:")
+            console.log(JSON.stringify(productoCompleto, null, 2))
+            
+            // ✅ DEBUG: Verificar unidad de medida en productoCompleto
+            console.log("🔍 Unidad de medida en productoCompleto:", 
+                    productoCompleto.unidadMedida, 
+                    productoCompleto.Unidad_Medida,
+                    "Tipo:", typeof productoCompleto.unidadMedida)
+            
+            // ✅ BUSCAR ID DE MARCA POR NOMBRE EN EL MODELO DE MARCAS
+            var marcaIdNumerico = 0
+            var nombreMarca = productoCompleto.marca_nombre || productoCompleto.Marca_Nombre || ""
+            
+            console.log("🏷️ Buscando marca:", nombreMarca, "en", marcasModel.length, "marcas")
+            
+            for (var j = 0; j < marcasModel.length; j++) {
+                var marca = marcasModel[j]
+                var marcaNombre = marca.nombre || marca.Nombre || ""
                 
-                // ✅ RESTAURAR productoData buscando el producto actualizado por código
-                if (mostrandoDetalleProducto && codigoProductoActual && detalleProductoLoader.item) {
-                    console.log("🔍 Buscando producto actualizado:", codigoProductoActual)
-                    
-                    // Buscar el producto en el array actualizado
-                    for (var i = 0; i < productosOriginales.length; i++) {
-                        if (productosOriginales[i].codigo === codigoProductoActual) {
-                            console.log("✅ Producto encontrado, restaurando productoData")
-                            productoParaDetalle = productosOriginales[i]
-                            detalleProductoLoader.item.productoData = productosOriginales[i]
-                            break
-                        }
+                if (marcaNombre === nombreMarca) {
+                    marcaIdNumerico = marca.id || marca.ID || 0
+                    console.log("✅ Marca encontrada:", nombreMarca, "→ ID:", marcaIdNumerico)
+                    break
+                }
+            }
+
+            if (marcaIdNumerico === 0 && nombreMarca) {
+                console.warn("⚠️ No se encontró ID para marca:", nombreMarca)
+                if (marcasModel.length > 0) {
+                    // Usar la primera marca como fallback
+                    marcaIdNumerico = marcasModel[0].id || 1
+                    nombreMarca = marcasModel[0].nombre || "Genérico"
+                    console.log("⚠️ Usando marca por defecto:", nombreMarca, "ID:", marcaIdNumerico)
+                }
+            }
+
+            // ✅ PREPARAR DATOS PARA EL FORMULARIO DE EDICIÓN
+            // CORRECCIÓN CRÍTICA: Usar la unidad de medida CORRECTA
+            var unidadMedida = productoCompleto.unidadMedida || 
+                            productoCompleto.Unidad_Medida || 
+                            "Tabletas"
+            
+            // ⚠️ CORRECCIÓN: Normalizar "Cápsula" a "Cápsulas"
+            if (unidadMedida === "Cápsula") {
+                unidadMedida = "Cápsulas"
+                console.log("🔄 Normalizando 'Cápsula' a 'Cápsulas'")
+            }
+            
+            console.log("🎯 Unidad de medida final para formulario:", unidadMedida)
+            
+            productoParaEditar = {
+                id: productoCompleto.id || producto.id,
+                codigo: productoCompleto.codigo || "",
+                nombre: productoCompleto.nombre || "",
+                detalles: productoCompleto.detalles || productoCompleto.Descripcion || "",
+                precio_compra: productoCompleto.precioCompra || 0,
+                precio_venta: productoCompleto.precioVenta || 0,
+                stock: productoCompleto.stockTotal || productoCompleto.stockUnitario || 0,
+                stockUnitario: productoCompleto.stockUnitario || 0,
+                marca: nombreMarca,
+                marca_id: marcaIdNumerico,
+                unidad_medida: unidadMedida, // ✅ CORREGIDO
+                stock_minimo: productoCompleto.stock_minimo || productoCompleto.Stock_Minimo || 10,
+                lotesTotales: productoCompleto.lotesTotales || 0
+            }
+            
+            modoEdicionProducto = true
+            
+            console.log("📝 Datos preparados para CrearProducto:")
+            console.log(JSON.stringify(productoParaEditar, null, 2))
+            
+        } else {
+            console.error("❌ Método get_producto_para_edicion no disponible en inventarioModel")
+            mostrarMensajeError("Error: Sistema no disponible para editar producto")
+        }
+    }
+
+    function cerrarEditarProducto() {
+        console.log("❌ Cerrando edición de producto")
+        modoEdicionProducto = false
+        productoParaEditar = null
+    }
+
+    function productoActualizado(producto) {
+        console.log("✅ Producto actualizado en Productos.qml:", producto.codigo || producto.Codigo)
+        
+        // ⚠️ CRÍTICO: Prevenir ciclos infinitos
+        if (_bloqueandoActualizacion) {
+            console.log("⏭️ Bloqueando actualización cíclica")
+            return
+        }
+        
+        _bloqueandoActualizacion = true
+        
+        // Cerrar primero el modal de edición
+        cerrarEditarProducto()
+        
+        // NO llamar a refresh_productos() aquí - ya se llama desde el backend
+        // Solo mostrar mensaje
+        mostrarMensajeExito("Producto actualizado correctamente")
+        
+        // Liberar el flag inmediatamente
+        _bloqueandoActualizacion = false
+    }
+
+    function confirmarEliminarProducto(producto) {
+        console.log("🗑️ Confirmar eliminación de:", producto.codigo)
+        
+        productoParaEliminar = producto
+        confirmDialogTitle = "¿Eliminar Producto?"
+        confirmDialogMessage = "¿Está seguro de eliminar el producto '" + producto.nombre + "'?\n\n" +
+                            "Código: " + producto.codigo + "\n" +
+                            "Esta acción es PERMANENTE.\n\n" +
+                            "⚠️ Solo se puede eliminar si NO tiene ventas registradas."
+        confirmDialogAccion = "eliminar_producto"
+        confirmDialogVisible = true
+    }
+
+    function eliminarProductoConfirmado() {
+        if (!productoParaEliminar) {
+            console.error("❌ No hay producto para eliminar")
+            return
+        }
+        
+        console.log("🗑️ Eliminando producto:", productoParaEliminar.codigo)
+        
+        if (inventarioModel && typeof inventarioModel.eliminar_producto === 'function') {
+            var resultado = inventarioModel.eliminar_producto(productoParaEliminar.codigo)
+            
+            if (resultado) {
+                console.log("✅ Producto eliminado exitosamente")
+                mostrarMensajeExito("Producto eliminado correctamente")
+                
+                // 🔥 CRITICAL FIX: Remove from local list immediately
+                var nuevoOriginales = []
+                for (var i = 0; i < productosOriginales.length; i++) {
+                    if (productosOriginales[i].codigo !== productoParaEliminar.codigo) {
+                        nuevoOriginales.push(productosOriginales[i])
                     }
                 }
-            })
-            
-            _refreshPending = false
-            _actualizandoDatos = false
+                productosOriginales = nuevoOriginales
+                
+                // Force refresh all data
+                Qt.callLater(function() {
+                    console.log("🔄 Forzando actualización completa después de eliminar...")
+                    precalcularStock()  // Recalculate stock
+                    cargarDatosParaFiltros()  // Reload filter data
+                    updateFilteredModel()  // Update the filtered model
+                    
+                    // Also try to refresh from central data
+                    if (farmaciaData && typeof farmaciaData.refreshProductos === 'function') {
+                        farmaciaData.refreshProductos()
+                    }
+                })
+            } else {
+                console.error("❌ Error al eliminar producto")
+                mostrarMensajeError("Error al eliminar el producto. Verifique que no tenga ventas registradas.")
+            }
+        } else {
+            console.error("❌ Función eliminar_producto no disponible en inventarioModel")
+            mostrarMensajeError("Función de eliminación no disponible")
         }
-    }
-}
-
-focus: true
-Keys.onEscapePressed: {
-    console.log("Tecla Escape presionada en Productos.qml")
-    
-    if (modoEdicionProducto) {
-        console.log("Cerrando EditarProducto con Escape")
-        cerrarEditarProducto()
-    } else if (mostrandoDetalleProducto) {
-        console.log("Cerrando detalle de producto con Escape")
-        cerrarDetalleProducto()
-    } else if (editarPrecioDialogOpen) {
-        console.log("Cerrando diálogo de precio con Escape")
-        editarPrecioDialogOpen = false
-    } else if (mostrandoEditarLote) {
-        console.log("Cerrando editar lote con Escape")
-        mostrandoEditarLote = false
-        loteParaEditar = null
-    } else if (confirmDialogVisible) {
-        console.log("Cerrando diálogo de confirmación con Escape")
+        
+        productoParaEliminar = null
         confirmDialogVisible = false
-    } else if (mostrandoMenuContextual) {
-        console.log("Cerrando menú contextual con Escape")
-        mostrandoMenuContextual = false
     }
-}
-
-// MODELO PAGINADO
-ListModel {
-    id: productosPaginadosModel
-}
-
-function cargarDatosParaFiltros() {
-    if (!inventarioModel) {
-        console.log("❌ InventarioModel no disponible para filtros")
-        datosLotesCargados = false
-        return
-    }
-    
-    console.log("🔄 Cargando datos para filtros desde InventarioModel...")
-    
-    try {
-        // Cargar lotes próximos a vencer
-        if (typeof inventarioModel.get_lotes_por_vencer === 'function') {
-            var proximosVencer = inventarioModel.get_lotes_por_vencer(60)
-            lotesProximosVencer = proximosVencer || []
-            console.log("📅 Lotes próximos a vencer:", lotesProximosVencer.length)
-        } else {
-            console.log("⚠️ Método get_lotes_por_vencer no disponible")
-            lotesProximosVencer = []
-        }
-        
-        // Cargar lotes vencidos
-        if (typeof inventarioModel.get_lotes_vencidos === 'function') {
-            var vencidos = inventarioModel.get_lotes_vencidos()
-            lotesVencidos = vencidos || []
-            console.log("⚠️ Lotes vencidos:", lotesVencidos.length)
-        } else {
-            console.log("⚠️ Método get_lotes_vencidos no disponible")
-            lotesVencidos = []
-        }
-        
-        // Cargar productos bajo stock
-        if (typeof inventarioModel.get_productos_bajo_stock === 'function') {
-            var bajoStock = inventarioModel.get_productos_bajo_stock(10)
-            productosConLotesBajoStock = bajoStock || []
-            console.log("📊 Productos bajo stock:", productosConLotesBajoStock.length)
-        } else {
-            console.log("⚠️ Método get_productos_bajo_stock no disponible")
-            productosConLotesBajoStock = []
-        }
-        
-        datosLotesCargados = true
-        console.log("✅ Datos de filtros cargados exitosamente")
-        
-    } catch (error) {
-        console.log("❌ Error cargando datos para filtros:", error)
-        lotesProximosVencer = []
-        lotesVencidos = []
-        productosConLotesBajoStock = []
-        datosLotesCargados = false
-    }
-}
-
-// ========================================
-// 🆕 FUNCIONES V2.0 - EDITAR Y ELIMINAR
-// ========================================
-
-function abrirEditarProducto(producto) {
-    console.log("✏️ Abriendo edición de producto ID:", producto.id, "Código:", producto.codigo)
-    
-    // ✅ DEBUG: Verificar unidad de medida original
-    console.log("🔍 Unidad de medida original en producto:", producto.unidadMedida, producto.unidad_medida)
-    
-    if (!marcasYaCargadas) {
-        cargarMarcasDesdeModel()
-    }
-    
-    // ✅ USAR EL NUEVO MÉTODO ESPECIALIZADO
-    if (inventarioModel && typeof inventarioModel.get_producto_para_edicion === 'function') {
-        console.log("🔍 Llamando a get_producto_para_edicion...")
-        var productoCompleto = inventarioModel.get_producto_para_edicion(producto.id)
-        
-        if (!productoCompleto || Object.keys(productoCompleto).length === 0) {
-            console.error("❌ No se pudo obtener datos completos del producto")
-            mostrarMensajeError("No se pudo cargar los datos del producto")
-            return
-        }
-        
-        console.log("📊 Datos COMPLETOS obtenidos para edición:")
-        console.log(JSON.stringify(productoCompleto, null, 2))
-        
-        // ✅ DEBUG: Verificar unidad de medida en productoCompleto
-        console.log("🔍 Unidad de medida en productoCompleto:", 
-                   productoCompleto.unidadMedida, 
-                   productoCompleto.Unidad_Medida,
-                   "Tipo:", typeof productoCompleto.unidadMedida)
-        
-        // ✅ BUSCAR ID DE MARCA POR NOMBRE EN EL MODELO DE MARCAS
-        var marcaIdNumerico = 0
-        var nombreMarca = productoCompleto.marca_nombre || productoCompleto.Marca_Nombre || ""
-        
-        console.log("🏷️ Buscando marca:", nombreMarca, "en", marcasModel.length, "marcas")
-        
-        for (var j = 0; j < marcasModel.length; j++) {
-            var marca = marcasModel[j]
-            var marcaNombre = marca.nombre || marca.Nombre || ""
-            
-            if (marcaNombre === nombreMarca) {
-                marcaIdNumerico = marca.id || marca.ID || 0
-                console.log("✅ Marca encontrada:", nombreMarca, "→ ID:", marcaIdNumerico)
-                break
-            }
-        }
-
-        if (marcaIdNumerico === 0 && nombreMarca) {
-            console.warn("⚠️ No se encontró ID para marca:", nombreMarca)
-            if (marcasModel.length > 0) {
-                // Usar la primera marca como fallback
-                marcaIdNumerico = marcasModel[0].id || 1
-                nombreMarca = marcasModel[0].nombre || "Genérico"
-                console.log("⚠️ Usando marca por defecto:", nombreMarca, "ID:", marcaIdNumerico)
-            }
-        }
-
-        // ✅ PREPARAR DATOS PARA EL FORMULARIO DE EDICIÓN
-        // CORRECCIÓN CRÍTICA: Usar la unidad de medida CORRECTA
-        var unidadMedida = productoCompleto.unidadMedida || 
-                          productoCompleto.Unidad_Medida || 
-                          "Tabletas"
-        
-        // ⚠️ CORRECCIÓN: Normalizar "Cápsula" a "Cápsulas"
-        if (unidadMedida === "Cápsula") {
-            unidadMedida = "Cápsulas"
-            console.log("🔄 Normalizando 'Cápsula' a 'Cápsulas'")
-        }
-        
-        console.log("🎯 Unidad de medida final para formulario:", unidadMedida)
-        
-        productoParaEditar = {
-            id: productoCompleto.id || producto.id,
-            codigo: productoCompleto.codigo || "",
-            nombre: productoCompleto.nombre || "",
-            detalles: productoCompleto.detalles || productoCompleto.Descripcion || "",
-            precio_compra: productoCompleto.precioCompra || 0,
-            precio_venta: productoCompleto.precioVenta || 0,
-            stock: productoCompleto.stockTotal || productoCompleto.stockUnitario || 0,
-            stockUnitario: productoCompleto.stockUnitario || 0,
-            marca: nombreMarca,
-            marca_id: marcaIdNumerico,
-            unidad_medida: unidadMedida, // ✅ CORREGIDO
-            stock_minimo: productoCompleto.stock_minimo || productoCompleto.Stock_Minimo || 10,
-            lotesTotales: productoCompleto.lotesTotales || 0
-        }
-        
-        modoEdicionProducto = true
-        
-        console.log("📝 Datos preparados para CrearProducto:")
-        console.log(JSON.stringify(productoParaEditar, null, 2))
-        
-    } else {
-        console.error("❌ Método get_producto_para_edicion no disponible en inventarioModel")
-        mostrarMensajeError("Error: Sistema no disponible para editar producto")
-    }
-}
-
-function cerrarEditarProducto() {
-    console.log("❌ Cerrando edición de producto")
-    modoEdicionProducto = false
-    productoParaEditar = null
-}
-
-function productoActualizado(producto) {
-    console.log("✅ Producto actualizado en Productos.qml:", producto.codigo || producto.Codigo)
-    
-    // ⚠️ CRÍTICO: Prevenir ciclos infinitos
-    if (_bloqueandoActualizacion) {
-        console.log("⏭️ Bloqueando actualización cíclica")
-        return
-    }
-    
-    _bloqueandoActualizacion = true
-    
-    // Cerrar primero el modal de edición
-    cerrarEditarProducto()
-    
-    // NO llamar a refresh_productos() aquí - ya se llama desde el backend
-    // Solo mostrar mensaje
-    mostrarMensajeExito("Producto actualizado correctamente")
-    
-    // Liberar el flag inmediatamente
-    _bloqueandoActualizacion = false
-}
-
-function confirmarEliminarProducto(producto) {
-    console.log("🗑️ Confirmar eliminación de:", producto.codigo)
-    
-    productoParaEliminar = producto
-    confirmDialogTitle = "¿Eliminar Producto?"
-    confirmDialogMessage = "¿Está seguro de eliminar el producto '" + producto.nombre + "'?\n\n" +
-                          "Código: " + producto.codigo + "\n" +
-                          "Esta acción es PERMANENTE.\n\n" +
-                          "⚠️ Solo se puede eliminar si NO tiene ventas registradas."
-    confirmDialogAccion = "eliminar_producto"
-    confirmDialogVisible = true
-}
-
-function eliminarProductoConfirmado() {
-    if (!productoParaEliminar) {
-        console.error("❌ No hay producto para eliminar")
-        return
-    }
-    
-    console.log("🗑️ Eliminando producto:", productoParaEliminar.codigo)
-    
-    if (inventarioModel && typeof inventarioModel.eliminar_producto === 'function') {
-        var resultado = inventarioModel.eliminar_producto(productoParaEliminar.codigo)
-        
-        if (resultado) {
-            console.log("✅ Producto eliminado exitosamente")
-            mostrarMensajeExito("Producto eliminado correctamente")
-            
-            // Refrescar datos
-            Qt.callLater(function() {
-                cargarDatosParaFiltros()
-                actualizarDesdeDataCentral()
-                updateFilteredModel()
-            })
-        } else {
-            console.error("❌ Error al eliminar producto")
-            mostrarMensajeError("Error al eliminar el producto. Verifique que no tenga ventas registradas.")
-        }
-    } else {
-        console.error("❌ Función eliminar_producto no disponible en inventarioModel")
-        mostrarMensajeError("Función de eliminación no disponible")
-    }
-    
-    productoParaEliminar = null
-    confirmDialogVisible = false
-}
 
 function cargarMarcasDesdeModel() {
     if (marcasCargando || marcasYaCargadas) {
@@ -1892,778 +1907,824 @@ Item {
     }
 }
 
-// ===============================
-// FUNCIONES PARA DETALLE DE PRODUCTO
-// ===============================
+    // ===============================
+    // FUNCIONES PARA DETALLE DE PRODUCTO
+    // ===============================
 
-function mostrarDetalleProducto(producto) {
-    console.log("👁️ Mostrando detalle de:", producto.codigo)
-    
-    productoParaDetalle = {
-        id: producto.id,
-        codigo: producto.codigo,
-        nombre: producto.nombre,
-        detalles: producto.detalles,
-        stockUnitario: producto.stock || 0,
-        precioVenta: producto.precioVenta,
-        precioCompra: producto.precioCompra,
-        unidadMedida: producto.unidadMedida,
-        idMarca: producto.idMarca,
-        stockMinimo: producto.stockMinimo
-    }
-    
-    mostrandoDetalleProducto = true
-}
-
-function cerrarDetalleProducto() {
-    console.log("❌ Cerrando detalle de producto")
-    mostrandoDetalleProducto = false
-    productoParaDetalle = null
-}
-
-// ===============================
-// 🔧 CAMBIO 2: Loader de DetalleProducto simplificado
-// ===============================
-Loader {
-    id: detalleProductoLoader
-    anchors.fill: parent
-    z: 2000
-    active: mostrandoDetalleProducto
-    source: mostrandoDetalleProducto ? "DetalleProducto.qml" : ""
-    
-    onLoaded: {
-        if (item) {
-            console.log("🔍 DetalleProducto.qml cargado")
-            item.inventarioModel = productosRoot.inventarioModel
-            item.productoData = productoParaDetalle
-            item.mostrarStock = true
-            item.mostrarAcciones = true
-            
-            // Conectar señal de cerrar
-            if (item.cerrarSolicitado) {
-                item.cerrarSolicitado.connect(function() {
-                    mostrandoDetalleProducto = false
-                    productoParaDetalle = null
-                })
-            }
+    function mostrarDetalleProducto(producto) {
+        console.log("👁️ Mostrando detalle de:", producto.codigo)
+        
+        productoParaDetalle = {
+            id: producto.id,
+            codigo: producto.codigo,
+            nombre: producto.nombre,
+            detalles: producto.detalles,
+            stockUnitario: producto.stock || 0,
+            precioVenta: producto.precioVenta,
+            precioCompra: producto.precioCompra,
+            unidadMedida: producto.unidadMedida,
+            idMarca: producto.idMarca,
+            stockMinimo: producto.stockMinimo
         }
+        
+        mostrandoDetalleProducto = true
     }
-}
 
-// ===============================
-// MODAL PARA EDITAR LOTE
-// ===============================
-Rectangle {
-    id: editarLoteContainer
-    anchors.fill: parent
-    z: 3000
-    visible: mostrandoEditarLote
-    color: "#80000000" // Fondo oscuro semi-transparente
-    
-    Rectangle {
-        anchors.centerIn: parent
-        width: Math.min(600, parent.width * 0.8)
-        height: Math.min(500, parent.height * 0.8)
-        radius: 12
-        color: whiteColor
-        // Quitamos el borde externo para que no choque con el diseño del diálogo
-        border.width: 0 
-        clip: true // Asegura que el contenido del Loader respete el radio de las esquinas
-
-        Loader {
-            id: editarLoteLoader
-            anchors.fill: parent
-            source: mostrandoEditarLote ? "EditarLoteDialog.qml" : ""
-            
-            onLoaded: {
-                if (item) {
-                    console.log("✏️ EditarLoteDialog.qml cargado")
-                    item.inventarioModel = inventarioModel
-                    item.loteData = loteParaEditar
-                }
-            }
-        }
+    function cerrarDetalleProducto() {
+        console.log("❌ Cerrando detalle de producto")
+        mostrandoDetalleProducto = false
+        productoParaDetalle = null
     }
-}
 
-// ✅ LOADER DE EDITAR PRODUCTO - V2.0 (solo para edición)
-Rectangle {
-    id: editarProductoContainer
-    anchors.fill: parent
-    z: 1000
-    visible: modoEdicionProducto
-    color: "transparent"
-    
+    // ===============================
+    // 🔧 CAMBIO 2: Loader de DetalleProducto simplificado
+    // ===============================
     Loader {
-        id: crearProductoLoader
+        id: detalleProductoLoader
         anchors.fill: parent
-        active: modoEdicionProducto
-        
-        sourceComponent: modoEdicionProducto ? crearProductoComponent : null
-        
-        Component {
-            id: crearProductoComponent
-            
-            CrearProducto {
-                anchors.fill: parent
-                
-                inventarioModel: productosRoot.inventarioModel
-                farmaciaData: productosRoot.farmaciaData
-                modoEdicion: modoEdicionProducto
-                productoData: productoParaEditar
-                
-                onProductoActualizado: function(producto) {
-                    console.log("📦 Producto actualizado en Loader:", producto.codigo || producto.Codigo)
-                    // NO llamar productoActualizado aquí - solo cerrar
-                    cerrarEditarProducto()
-                    mostrarMensajeExito("Producto actualizado correctamente")
-                }
-                
-                onCancelarCreacion: {
-                    console.log("❌ Edición cancelada")
-                    cerrarEditarProducto()
-                }
-                
-                // ✅ NUEVO: Conectar señal volverALista
-                onVolverALista: {
-                    console.log("🔙 Volviendo a lista desde CrearProducto")
-                    cerrarEditarProducto()
-                    refrescarTablaCompleta()
-                }
-            }
-        }
+        z: 2000
+        active: mostrandoDetalleProducto
+        source: mostrandoDetalleProducto ? "DetalleProducto.qml" : ""
         
         onLoaded: {
             if (item) {
-                console.log("🚀 CrearProducto.qml cargado en modo edición...")
+                console.log("🔍 DetalleProducto.qml cargado")
+                item.inventarioModel = productosRoot.inventarioModel
+                item.productoData = productoParaDetalle
+                item.mostrarStock = true
+                item.mostrarAcciones = true
                 
-                // ✅ CRÍTICO: Asignar marcasModel DIRECTAMENTE desde inventarioModel
-                if (inventarioModel && inventarioModel.marcasDisponibles) {
-                    item.marcasModel = inventarioModel.marcasDisponibles
-                    item.marcasCargadas = true
-                    console.log("🏷️ Marcas asignadas directamente:", inventarioModel.marcasDisponibles.length)
-                }
-                
-                if (modoEdicionProducto && productoParaEditar) {
-                    item.inicializarParaEditar(productoParaEditar)
+                // Conectar señal de cerrar
+                if (item.cerrarSolicitado) {
+                    item.cerrarSolicitado.connect(function() {
+                        mostrandoDetalleProducto = false
+                        productoParaDetalle = null
+                    })
                 }
             }
         }
     }
-}
 
-Connections {
-    target: editarLoteLoader.item
-    enabled: editarLoteLoader.item !== null
-    
-    function onLoteActualizado(datosActualizados) {
-        console.log("✅ Lote actualizado, recargando DetalleProducto")
-        
-        // ✅ SIMPLIFICADO: Solo validar que el loader exista
-        if (detalleProductoLoader.item && detalleProductoLoader.item.cargarDatosProducto) {
-            detalleProductoLoader.item.cargarDatosProducto()
-        }
-        
-        // Cerrar el diálogo de edición
-        mostrandoEditarLote = false
-        loteParaEditar = null
-    }
-    
-    function onCancelado() {
-        console.log("❌ Edición de lote cancelada")
-        mostrandoEditarLote = false
-        loteParaEditar = null
-    }
-}
-
-Rectangle {
-    id: notificacionFlotante
-    anchors.horizontalCenter: parent.horizontalCenter
-    anchors.bottom: parent.bottom
-    anchors.bottomMargin: 80
-    
-    width: Math.min(400, parent.width - 32)
-    height: 50
-    
-    color: mensajeColor
-    radius: 25
-    
-    visible: mostrandoMensaje
-    opacity: mostrandoMensaje ? 1.0 : 0.0
-    
-    z: 2000
-    
-    Behavior on opacity {
-        NumberAnimation { duration: 300 }
-    }
-    
-    // Sombra
+    // ===============================
+    // MODAL PARA EDITAR LOTE
+    // ===============================
     Rectangle {
+        id: editarLoteContainer
         anchors.fill: parent
-        anchors.topMargin: 2
-        color: "#00000030"
-        radius: 25
-        z: -1
-    }
-    
-    RowLayout {
-        anchors.fill: parent
-        anchors.margins: 16
-        spacing: 12
+        z: 3000
+        visible: mostrandoEditarLote
+        color: "#80000000" // Fondo oscuro semi-transparente
         
-        Label {
-            text: {
-                switch(mensajeTipo) {
-                    case "success": return "✅"
-                    case "error": return "❌" 
-                    case "warning": return "⚠️"
-                    default: return "ℹ️"
+        Rectangle {
+            anchors.centerIn: parent
+            width: Math.min(600, parent.width * 0.8)
+            height: Math.min(500, parent.height * 0.8)
+            radius: 12
+            color: whiteColor
+            // Quitamos el borde externo para que no choque con el diseño del diálogo
+            border.width: 0 
+            clip: true // Asegura que el contenido del Loader respete el radio de las esquinas
+
+            Loader {
+                id: editarLoteLoader
+                anchors.fill: parent
+                source: mostrandoEditarLote ? "EditarLoteDialog.qml" : ""
+                
+                onLoaded: {
+                    if (item) {
+                        console.log("✏️ EditarLoteDialog.qml cargado")
+                        item.inventarioModel = inventarioModel
+                        item.loteData = loteParaEditar
+                    }
                 }
             }
-            font.pixelSize: 18
-            color: whiteColor
-        }
-        
-        Label {
-            Layout.fillWidth: true
-            text: mensajeTexto
-            font.pixelSize: 12
-            font.bold: true
-            color: whiteColor
-            wrapMode: Text.WordWrap
-            maximumLineCount: 2
-            elide: Text.ElideRight
         }
     }
-    
-    MouseArea {
+
+    // ✅ LOADER DE EDITAR PRODUCTO - V2.0 (solo para edición)
+    Rectangle {
+        id: editarProductoContainer
         anchors.fill: parent
-        onClicked: mostrandoMensaje = false
+        z: 1000
+        visible: modoEdicionProducto
+        color: "transparent"
+        
+        Loader {
+            id: crearProductoLoader
+            anchors.fill: parent
+            active: modoEdicionProducto
+            
+            sourceComponent: modoEdicionProducto ? crearProductoComponent : null
+            
+            Component {
+                id: crearProductoComponent
+                
+                CrearProducto {
+                    anchors.fill: parent
+                    
+                    inventarioModel: productosRoot.inventarioModel
+                    farmaciaData: productosRoot.farmaciaData
+                    modoEdicion: modoEdicionProducto
+                    productoData: productoParaEditar
+                    
+                    onProductoActualizado: function(producto) {
+                        console.log("📦 Producto actualizado en Loader:", producto.codigo || producto.Codigo)
+                        // NO llamar productoActualizado aquí - solo cerrar
+                        cerrarEditarProducto()
+                        mostrarMensajeExito("Producto actualizado correctamente")
+                    }
+                    
+                    onCancelarCreacion: {
+                        console.log("❌ Edición cancelada")
+                        cerrarEditarProducto()
+                    }
+                    
+                    // ✅ NUEVO: Conectar señal volverALista
+                    onVolverALista: {
+                        console.log("🔙 Volviendo a lista desde CrearProducto")
+                        cerrarEditarProducto()
+                        refrescarTablaCompleta()
+                    }
+                }
+            }
+            
+            onLoaded: {
+                if (item) {
+                    console.log("🚀 CrearProducto.qml cargado en modo edición...")
+                    
+                    // ✅ CRÍTICO: Asignar marcasModel DIRECTAMENTE desde inventarioModel
+                    if (inventarioModel && inventarioModel.marcasDisponibles) {
+                        item.marcasModel = inventarioModel.marcasDisponibles
+                        item.marcasCargadas = true
+                        console.log("🏷️ Marcas asignadas directamente:", inventarioModel.marcasDisponibles.length)
+                    }
+                    
+                    if (modoEdicionProducto && productoParaEditar) {
+                        item.inicializarParaEditar(productoParaEditar)
+                    }
+                }
+            }
+        }
     }
-}
 
-// ✅ NUEVA FUNCIÓN: PRECALCULAR STOCK (evita binding loops)
-function precalcularStock() {
-    console.log("📊 Precalculando stock de productos...")
-    
-    if (!inventarioModel || typeof inventarioModel.obtener_stock_actual !== 'function') {
-        console.log("⚠️ InventarioModel no disponible")
-        return
+    Connections {
+        target: editarLoteLoader.item
+        enabled: editarLoteLoader.item !== null
+        
+        function onLoteActualizado(datosActualizados) {
+            console.log("✅ Lote actualizado, recargando DetalleProducto")
+            
+            // ✅ SIMPLIFICADO: Solo validar que el loader exista
+            if (detalleProductoLoader.item && detalleProductoLoader.item.cargarDatosProducto) {
+                detalleProductoLoader.item.cargarDatosProducto()
+            }
+            
+            // Cerrar el diálogo de edición
+            mostrandoEditarLote = false
+            loteParaEditar = null
+        }
+        
+        function onCancelado() {
+            console.log("❌ Edición de lote cancelada")
+            mostrandoEditarLote = false
+            loteParaEditar = null
+        }
+    }
+
+    Rectangle {
+        id: notificacionFlotante
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: 80
+        
+        width: Math.min(400, parent.width - 32)
+        height: 50
+        
+        color: mensajeColor
+        radius: 25
+        
+        visible: mostrandoMensaje
+        opacity: mostrandoMensaje ? 1.0 : 0.0
+        
+        z: 2000
+        
+        Behavior on opacity {
+            NumberAnimation { duration: 300 }
+        }
+        
+        // Sombra
+        Rectangle {
+            anchors.fill: parent
+            anchors.topMargin: 2
+            color: "#00000030"
+            radius: 25
+            z: -1
+        }
+        
+        RowLayout {
+            anchors.fill: parent
+            anchors.margins: 16
+            spacing: 12
+            
+            Label {
+                text: {
+                    switch(mensajeTipo) {
+                        case "success": return "✅"
+                        case "error": return "❌" 
+                        case "warning": return "⚠️"
+                        default: return "ℹ️"
+                    }
+                }
+                font.pixelSize: 18
+                color: whiteColor
+            }
+            
+            Label {
+                Layout.fillWidth: true
+                text: mensajeTexto
+                font.pixelSize: 12
+                font.bold: true
+                color: whiteColor
+                wrapMode: Text.WordWrap
+                maximumLineCount: 2
+                elide: Text.ElideRight
+            }
+        }
+        
+        MouseArea {
+            anchors.fill: parent
+            onClicked: mostrandoMensaje = false
+        }
+    }
+
+    // ✅ NUEVA FUNCIÓN: PRECALCULAR STOCK (evita binding loops)
+    function precalcularStock() {
+        console.log("📊 Precalculando stock de productos...")
+        
+        if (!inventarioModel || typeof inventarioModel.obtener_stock_actual !== 'function') {
+            console.log("⚠️ InventarioModel no disponible")
+            return
+        }
+        
+        var datosStock = inventarioModel.obtener_stock_actual() || []
+        console.log("📦 Datos de stock recibidos:", datosStock.length , "productos")
+        
+        // ✅ NUEVO DEBUG: Ver TODOS los códigos recibidos
+        console.log("📋 Códigos recibidos:")
+        for (var j = 0; j < datosStock.length; j++) {
+            console.log("   -", datosStock[j].Codigo || datosStock[j].codigo, "| Stock:", datosStock[j].Stock_Real || datosStock[j].stock)
+        }
+        
+        var nuevoMapa = {}
+        
+        for (var i = 0; i < datosStock.length; i++) {
+            var producto = datosStock[i]
+            
+            // ✅ USAR COLUMNAS CORRECTAS DEL BACKEND - CON VALIDACIÓN
+            var codigo = producto.Codigo || producto.codigo || ""
+            if (!codigo) continue; // Saltar si no hay código
+            
+            var stock = producto.Stock_Real || producto.Stock_Total || producto.stock || 0
+            var stockMin = producto.Stock_Minimo || producto.stock_minimo || 10
+            var stockMax = producto.Stock_Maximo || producto.stock_maximo || 100
+            
+            var estado = "NORMAL"
+            var color = stockNormalColor
+            
+            // Calcular estado según stock
+            if (stock <= 0) {
+                estado = "CRÍTICO"
+                color = stockCriticoColor
+            } else if (stock <= stockMin) {
+                estado = "CRÍTICO"
+                color = stockCriticoColor
+            } else if (stock <= (stockMin + (stockMax - stockMin) * 0.3)) {
+                estado = "BAJO"
+                color = stockBajoColor
+            }
+            
+            nuevoMapa[codigo] = {
+                stock: stock,
+                color: color,
+                estado: estado
+            }
+            
+            // Debug primeros 3 productos
+            if (i < 3) {
+                console.log("   🔍", codigo, "- Stock:", stock, "Estado:", estado)
+            }
+        }
+        
+        mapaStock = nuevoMapa
+        stockCalculado = true
+        
+        console.log("✅ Stock precalculado para", Object.keys(mapaStock).length, "productos")
+    }
+
+    // ===============================
+    // FUNCIONES PARA MODALES
+    // ===============================
+
+    function abrirEditarLote(lote) {
+        console.log("✏️ Abriendo edición de lote:", lote.id || lote.Id_Lote)
+        console.log("📦 Objeto lote completo:", JSON.stringify(lote))
+        
+        // ✅ Asignar PRIMERO el lote
+        loteParaEditar = lote
+        
+        // ✅ Esperar un frame antes de mostrar el diálogo
+        Qt.callLater(function() {
+            mostrandoEditarLote = true
+        })
+    }
+
+    function eliminarLote(lote) {
+        console.log("🗑️ Eliminando lote:", lote.id || lote.Id_Lote)
+        
+        if (!inventarioModel) {
+            console.log("❌ InventarioModel no disponible")
+            return
+        }
+        
+        var loteId = lote.id || lote.Id_Lote
+        var exito = inventarioModel.eliminar_lote(loteId)
+        
+        if (exito) {
+            console.log("✅ Lote eliminado exitosamente")
+            mostrarMensajeExito("Lote eliminado correctamente")
+            
+            // Recargar datos
+            if (inventarioModel) {
+                inventarioModel.refresh_productos()
+            }
+            
+            // ✅ CRÍTICO: Recargar DetalleProducto si está visible
+            if (mostrandoDetalleProducto && detalleProductoLoader.item) {
+                console.log("🔄 Forzando recarga de DetalleProducto después de eliminar lote")
+                Qt.callLater(function() {
+                    detalleProductoLoader.item.cargarDatosProducto()
+                })
+            }
+            
+            Qt.callLater(function() {
+                precalcularStock()
+                cargarDatosParaFiltros()
+                actualizarDesdeDataCentral()
+            })
+        } else {
+            console.log("❌ Error eliminando lote")
+            mostrarMensajeError("Error al eliminar el lote")
+        }
+    }
+
+    function getTotalCount() {
+        if (productosOriginales.length === 0) {
+            return productosFilteredModel.count
+        }
+        return productosOriginales.length
+    }
+
+    function getProximosVencerCount() {
+        if (!datosLotesCargados) return 0
+        
+        var productosUnicos = new Set()
+        
+        for (var i = 0; i < lotesProximosVencer.length; i++) {
+            var lote = lotesProximosVencer[i]
+            // SIN CAJAS: solo verificar stock unitario
+            if ((lote.Cantidad_Unitario || lote.Stock_Lote || 0) > 0) {
+                productosUnicos.add(lote.Codigo)
+            }
+        }
+        
+        return productosUnicos.size
     }
     
-    var datosStock = inventarioModel.obtener_stock_actual() || []
-    console.log("📦 Datos de stock recibidos:", datosStock.length , "productos")
-    
-    // ✅ NUEVO DEBUG: Ver TODOS los códigos recibidos
-    console.log("📋 Códigos recibidos:")
-    for (var j = 0; j < datosStock.length; j++) {
-        console.log("   -", datosStock[j].Codigo || datosStock[j].codigo, "| Stock:", datosStock[j].Stock_Real || datosStock[j].stock)
+    function getVencidosCount() {
+        if (!datosLotesCargados) return 0
+        
+        var productosUnicos = new Set()
+        
+        for (var i = 0; i < lotesVencidos.length; i++) {
+            var lote = lotesVencidos[i]
+            // SIN CAJAS: solo verificar stock unitario
+            if ((lote.Cantidad_Unitario || lote.Stock_Lote || 0) > 0) {
+                productosUnicos.add(lote.Codigo)
+            }
+        }
+        
+        return productosUnicos.size
     }
-    
-    var nuevoMapa = {}
-    
-    for (var i = 0; i < datosStock.length; i++) {
-        var producto = datosStock[i]
+
+    function getBajoStockCount() {
+        if (!datosLotesCargados) return 0
+        return productosConLotesBajoStock.length
+    }
+
+    function updateFilteredModel() {
+        console.log("🔍 Actualizando modelo filtrado, filtro:", currentFilter, "búsqueda:", searchText)
+        console.log("  - Datos de lotes cargados:", datosLotesCargados)
+        console.log("  - Productos originales:", productosOriginales.length)
         
-        // ✅ USAR COLUMNAS CORRECTAS DEL BACKEND - CON VALIDACIÓN
-        var codigo = producto.Codigo || producto.codigo || ""
-        if (!codigo) continue; // Saltar si no hay código
+        if (productosOriginales.length === 0) {
+            for (var i = 0; i < productosFilteredModel.count; i++) {
+                productosOriginales.push({
+                    id: productosFilteredModel.get(i).id,
+                    codigo: productosFilteredModel.get(i).codigo,
+                    nombre: productosFilteredModel.get(i).nombre,
+                    detalles: productosFilteredModel.get(i).detalles,
+                    precioCompra: productosFilteredModel.get(i).precioCompra,
+                    precioVenta: productosFilteredModel.get(i).precioVenta,
+                    stockUnitario: productosFilteredModel.get(i).stockUnitario,
+                    unidadMedida: productosFilteredModel.get(i).unidadMedida,
+                    idMarca: productosFilteredModel.get(i).idMarca
+                })
+            }
+        }
         
-        var stock = producto.Stock_Real || producto.Stock_Total || producto.stock || 0
-        var stockMin = producto.Stock_Minimo || producto.stock_minimo || 10
-        var stockMax = producto.Stock_Maximo || producto.stock_maximo || 100
+        productosFilteredModel.clear()
         
-        var estado = "NORMAL"
-        var color = stockNormalColor
+        var productosFiltrados = []
         
-        // Calcular estado según stock
+        for (var j = 0; j < productosOriginales.length; j++) {
+            var producto = productosOriginales[j]
+            var pasaFiltro = false
+            
+            switch(currentFilter) {
+                case 0:
+                    pasaFiltro = true
+                    break
+                case 1:
+                    pasaFiltro = esProximoVencer(producto)
+                    console.log("  Producto", producto.codigo, "próximo vencer:", pasaFiltro)
+                    break
+                case 2:
+                    pasaFiltro = esVencido(producto)
+                    console.log("  Producto", producto.codigo, "vencido:", pasaFiltro)
+                    break
+                case 3:
+                    pasaFiltro = esBajoStock(producto)
+                    console.log("  Producto", producto.codigo, "bajo stock:", pasaFiltro)
+                    break
+            }
+            
+            if (pasaFiltro && searchText.length > 0) {
+                var textoSearch = searchText.toLowerCase()
+                var nombreMatch = producto.nombre.toLowerCase().includes(textoSearch)
+                var codigoMatch = producto.codigo.toLowerCase().includes(textoSearch)
+                pasaFiltro = nombreMatch || codigoMatch
+            }
+            
+            if (pasaFiltro) {
+                productosFiltrados.push(producto)
+            }
+        }
+        
+        for (var k = 0; k < productosFiltrados.length; k++) {
+            productosFilteredModel.append(productosFiltrados[k])
+        }
+
+        console.log("✅ Filtro aplicado. Productos mostrados:", productosFiltrados.length)
+        
+        currentPage = 0
+        updatePaginatedModel()
+    }
+
+    function esProximoVencer(producto) {
+        if (!producto || !producto.codigo || !datosLotesCargados) return false
+        
+        for (var i = 0; i < lotesProximosVencer.length; i++) {
+            var lote = lotesProximosVencer[i]
+            // SIN CAJAS: solo cantidad unitaria
+            var stockLote = lote.Cantidad_Unitario || lote.Stock_Lote || 0
+            if (lote.Codigo === producto.codigo && stockLote > 0) {
+                return true
+            }
+        }     
+        return false
+    }
+
+    function esVencido(producto) {
+        if (!producto || !producto.codigo || !datosLotesCargados) return false
+        
+        for (var i = 0; i < lotesVencidos.length; i++) {
+            var lote = lotesVencidos[i]
+            // SIN CAJAS: solo cantidad unitaria
+            var stockLote = lote.Cantidad_Unitario || lote.Stock_Lote || 0
+            if (lote.Codigo === producto.codigo && stockLote > 0) {
+                return true
+            }
+        }     
+        return false
+    }
+
+    function esBajoStock(producto) {
+        if (!producto || !producto.codigo || !productosConLotesBajoStock) return false
+        
+        for (var i = 0; i < productosConLotesBajoStock.length; i++) {
+            var productoBajoStock = productosConLotesBajoStock[i]
+            if (productoBajoStock.Codigo === producto.codigo) {
+                return true
+            }
+        }
+        return false
+    }
+
+    function updatePaginatedModel() {
+        productosPaginadosModel.clear()
+        
+        var totalItems = productosFilteredModel.count
+        totalPages = Math.ceil(totalItems / itemsPerPage)
+        
+        if (currentPage >= totalPages && totalPages > 0) {
+            currentPage = totalPages - 1
+        }
+        if (currentPage < 0) {
+            currentPage = 0
+        }
+        
+        var startIndex = currentPage * itemsPerPage
+        var endIndex = Math.min(startIndex + itemsPerPage, totalItems)
+        
+        for (var i = startIndex; i < endIndex; i++) {
+            var producto = productosFilteredModel.get(i)
+            productosPaginadosModel.append(producto)
+        }
+    }
+
+    function guardarPrecioVenta() {
+        if (!productoSeleccionado) {
+            console.log("❌ No hay producto seleccionado")
+            return
+        }
+        
+        var nuevoPrecio = parseFloat(precioVentaEditField.text)
+        if (isNaN(nuevoPrecio) || nuevoPrecio <= 0) {
+            console.log("❌ Precio inválido:", precioVentaEditField.text)
+            return
+        }
+        
+        console.log("💰 Solicitando actualización de precio:", productoSeleccionado.codigo, "a Bs", nuevoPrecio)
+        
+        if (farmaciaData && farmaciaData.actualizarPrecioVentaProducto) {
+            var exito = farmaciaData.actualizarPrecioVentaProducto(productoSeleccionado.codigo, nuevoPrecio)
+            if (exito) {
+                editarPrecioDialogOpen = false
+                console.log("✅ Precio actualizado exitosamente en centro de datos")
+            } else {
+                console.log("❌ Error al actualizar precio en centro de datos")
+            }
+        } else {
+            console.log("❌ Función actualizarPrecioVentaProducto no disponible")
+        }
+    }
+
+    function obtenerMarcasModel() {
+        return marcasModel
+    }
+
+    function getStockColor(stock) {
         if (stock <= 0) {
-            estado = "CRÍTICO"
-            color = stockCriticoColor
-        } else if (stock <= stockMin) {
-            estado = "CRÍTICO"
-            color = stockCriticoColor
-        } else if (stock <= (stockMin + (stockMax - stockMin) * 0.3)) {
-            estado = "BAJO"
-            color = stockBajoColor
-        }
-        
-        nuevoMapa[codigo] = {
-            stock: stock,
-            color: color,
-            estado: estado
-        }
-        
-        // Debug primeros 3 productos
-        if (i < 3) {
-            console.log("   🔍", codigo, "- Stock:", stock, "Estado:", estado)
+            return dangerColor
+        } else if (stock <= 15) {
+            return "#8e44ad"
+        } else {
+            return successColor
         }
     }
-    
-    mapaStock = nuevoMapa
-    stockCalculado = true
-    
-    console.log("✅ Stock precalculado para", Object.keys(mapaStock).length, "productos")
-}
 
-// ===============================
-// FUNCIONES PARA MODALES
-// ===============================
+    property bool mostrandoMensaje: false
+    property string mensajeTexto: ""
+    property string mensajeTipo: "info" // "success", "error", "warning", "info"
+    property color mensajeColor: blueColor
 
-function abrirEditarLote(lote) {
-    console.log("✏️ Abriendo edición de lote:", lote.id || lote.Id_Lote)
-    console.log("📦 Objeto lote completo:", JSON.stringify(lote))
-    
-    // ✅ Asignar PRIMERO el lote
-    loteParaEditar = lote
-    
-    // ✅ Esperar un frame antes de mostrar el diálogo
-    Qt.callLater(function() {
-        mostrandoEditarLote = true
-    })
-}
-
-function eliminarLote(lote) {
-    console.log("🗑️ Eliminando lote:", lote.id || lote.Id_Lote)
-    
-    if (!inventarioModel) {
-        console.log("❌ InventarioModel no disponible")
-        return
+    Timer {
+        id: mensajeTimer
+        interval: 4000
+        onTriggered: mostrandoMensaje = false
     }
-    
-    var loteId = lote.id || lote.Id_Lote
-    var exito = inventarioModel.eliminar_lote(loteId)
-    
-    if (exito) {
-        console.log("✅ Lote eliminado exitosamente")
-        mostrarMensajeExito("Lote eliminado correctamente")
+
+    function mostrarMensajeExito(mensaje) {
+        mensajeTexto = mensaje
+        mensajeTipo = "success"
+        mensajeColor = successColor
+        mostrandoMensaje = true
+        mensajeTimer.restart()
+        console.log("✅ Mensaje éxito:", mensaje)
+    }
+
+    function mostrarMensajeError(mensaje) {
+        mensajeTexto = mensaje
+        mensajeTipo = "error"
+        mensajeColor = dangerColor
+        mostrandoMensaje = true
+        mensajeTimer.restart()
+        console.log("❌ Mensaje error:", mensaje)
+    }
+
+    function mostrarMensajeWarning(mensaje) {
+        mensajeTexto = mensaje
+        mensajeTipo = "warning"
+        mensajeColor = warningColor
+        mostrandoMensaje = true
+        mensajeTimer.restart()
+        console.log("⚠️ Mensaje warning:", mensaje)
+    }
+
+    // FilterButton component
+    component FilterButton: Rectangle {
+        property string text: ""
+        property int count: 0
+        property bool active: false
+        property color backgroundColor: blueColor
+        signal clicked()
         
-        // Recargar datos
-        if (inventarioModel) {
+        Layout.preferredHeight: 32
+        Layout.preferredWidth: implicitWidth + 16
+        
+        property int implicitWidth: textLabel.implicitWidth + countLabel.implicitWidth + 32
+        
+        color: active ? backgroundColor : "transparent"
+        border.color: backgroundColor
+        border.width: 2
+        radius: 16
+        
+        Behavior on color { ColorAnimation { duration: 200 } }
+        
+        RowLayout {
+            anchors.fill: parent
+            anchors.margins: 6
+            spacing: 6
+            
+            Label {
+                id: textLabel
+                text: parent.parent.text
+                color: active ? whiteColor : backgroundColor
+                font.bold: true
+                font.pixelSize: 11
+                Behavior on color { ColorAnimation { duration: 200 } }
+            }
+            
+            Rectangle {
+                id: countLabel
+                Layout.preferredWidth: 20
+                Layout.preferredHeight: 16
+                color: active ? whiteColor : backgroundColor
+                radius: 8
+                Behavior on color { ColorAnimation { duration: 200 } }
+                
+                Label {
+                    anchors.centerIn: parent
+                    text: parent.parent.parent.count.toString()
+                    color: active ? backgroundColor : whiteColor
+                    font.bold: true
+                    font.pixelSize: 14
+                    Behavior on color { ColorAnimation { duration: 200 } }
+                }
+            }
+        }
+        
+        MouseArea {
+            anchors.fill: parent
+            onClicked: parent.clicked()
+        }
+    }
+
+    function cargarPreciosYMargenes() {
+        if (!productoData) return
+        
+        try {
+            // Precio de venta desde productoData
+            precioVenta = productoData.precioVenta || productoData.Precio_venta || 0.0
+            
+            // ✅ NUEVO: Calcular costo promedio desde los lotes cargados
+            if (lotesData && lotesData.length > 0) {
+                var sumaCostos = 0
+                var totalUnidades = 0
+                
+                for (var i = 0; i < lotesData.length; i++) {
+                    var lote = lotesData[i]
+                    var stock = lote.Stock_Lote || 0
+                    var precio = lote.Precio_Compra || 0
+                    
+                    if (stock > 0) {
+                        sumaCostos += (stock * precio)
+                        totalUnidades += stock
+                    }
+                }
+                
+                if (totalUnidades > 0) {
+                    costoPromedio = sumaCostos / totalUnidades
+                    console.log("💰 Costo promedio calculado desde lotes:", costoPromedio)
+                } else {
+                    costoPromedio = 0
+                    console.log("⚠️ No hay stock en lotes para calcular costo")
+                }
+            } else {
+                costoPromedio = 0
+                console.log("⚠️ No hay lotes para calcular costo promedio")
+            }
+            
+            // Calcular margen
+            if (precioVenta > 0 && costoPromedio > 0) {
+                margenActual = precioVenta - costoPromedio
+                porcentajeMargen = (margenActual / costoPromedio) * 100
+            } else {
+                margenActual = 0
+                porcentajeMargen = 0
+            }
+            
+            console.log("📊 Precios y márgenes:")
+            console.log("   - Precio venta:", precioVenta)
+            console.log("   - Costo promedio:", costoPromedio)
+            console.log("   - Margen:", margenActual, "(", porcentajeMargen.toFixed(1), "%)")
+            
+        } catch (error) {
+            console.log("❌ Error calculando precios:", error.toString())
+        }
+    }
+
+    function refrescarTablaCompleta() {
+        console.log("🔄 Refrescando tabla completa...")
+        
+        // 1. Obtener datos frescos
+        if (inventarioModel && typeof inventarioModel.refresh_productos === 'function') {
             inventarioModel.refresh_productos()
         }
         
-        // ✅ CRÍTICO: Recargar DetalleProducto si está visible
-        if (mostrandoDetalleProducto && detalleProductoLoader.item) {
-            console.log("🔄 Forzando recarga de DetalleProducto después de eliminar lote")
-            Qt.callLater(function() {
-                detalleProductoLoader.item.cargarDatosProducto()
-            })
-        }
-        
+        // 2. Esperar un momento y actualizar
         Qt.callLater(function() {
+            // 3. Recargar todo
             precalcularStock()
             cargarDatosParaFiltros()
             actualizarDesdeDataCentral()
+            
+            // 4. Forzar actualización de UI
+            productosPaginadosModel.clear()
+            updateFilteredModel()
+            
+            console.log("✅ Tabla refrescada completamente")
         })
-    } else {
-        console.log("❌ Error eliminando lote")
-        mostrarMensajeError("Error al eliminar el lote")
     }
-}
 
-function getTotalCount() {
-    if (productosOriginales.length === 0) {
-        return productosFilteredModel.count
-    }
-    return productosOriginales.length
-}
-
-function getProximosVencerCount() {
-    if (!datosLotesCargados) return 0
-    
-    var productosUnicos = new Set()
-    
-    for (var i = 0; i < lotesProximosVencer.length; i++) {
-        var lote = lotesProximosVencer[i]
-        // SIN CAJAS: solo verificar stock unitario
-        if ((lote.Cantidad_Unitario || lote.Stock_Lote || 0) > 0) {
-            productosUnicos.add(lote.Codigo)
-        }
-    }
-    
-    return productosUnicos.size
-}
- 
-function getVencidosCount() {
-    if (!datosLotesCargados) return 0
-    
-    var productosUnicos = new Set()
-    
-    for (var i = 0; i < lotesVencidos.length; i++) {
-        var lote = lotesVencidos[i]
-        // SIN CAJAS: solo verificar stock unitario
-        if ((lote.Cantidad_Unitario || lote.Stock_Lote || 0) > 0) {
-            productosUnicos.add(lote.Codigo)
-        }
-    }
-    
-    return productosUnicos.size
-}
-
-function getBajoStockCount() {
-    if (!datosLotesCargados) return 0
-    return productosConLotesBajoStock.length
-}
-
-function updateFilteredModel() {
-    console.log("🔍 Actualizando modelo filtrado, filtro:", currentFilter, "búsqueda:", searchText)
-    console.log("  - Datos de lotes cargados:", datosLotesCargados)
-    console.log("  - Productos originales:", productosOriginales.length)
-    
-    if (productosOriginales.length === 0) {
-        for (var i = 0; i < productosFilteredModel.count; i++) {
-            productosOriginales.push({
-                id: productosFilteredModel.get(i).id,
-                codigo: productosFilteredModel.get(i).codigo,
-                nombre: productosFilteredModel.get(i).nombre,
-                detalles: productosFilteredModel.get(i).detalles,
-                precioCompra: productosFilteredModel.get(i).precioCompra,
-                precioVenta: productosFilteredModel.get(i).precioVenta,
-                stockUnitario: productosFilteredModel.get(i).stockUnitario,
-                unidadMedida: productosFilteredModel.get(i).unidadMedida,
-                idMarca: productosFilteredModel.get(i).idMarca
-            })
-        }
-    }
-    
-    productosFilteredModel.clear()
-    
-    var productosFiltrados = []
-    
-    for (var j = 0; j < productosOriginales.length; j++) {
-        var producto = productosOriginales[j]
-        var pasaFiltro = false
+    Component.onCompleted: {
+        console.log("📦 Módulo Productos FIFO 2.0 V2.0 iniciado")
+        console.log("   InventarioModel:", !!inventarioModel)
+        console.log("   FarmaciaData:", !!farmaciaData)
         
-        switch(currentFilter) {
-            case 0:
-                pasaFiltro = true
-                break
-            case 1:
-                pasaFiltro = esProximoVencer(producto)
-                console.log("  Producto", producto.codigo, "próximo vencer:", pasaFiltro)
-                break
-            case 2:
-                pasaFiltro = esVencido(producto)
-                console.log("  Producto", producto.codigo, "vencido:", pasaFiltro)
-                break
-            case 3:
-                pasaFiltro = esBajoStock(producto)
-                console.log("  Producto", producto.codigo, "bajo stock:", pasaFiltro)
-                break
-        }
-        
-        if (pasaFiltro && searchText.length > 0) {
-            var textoSearch = searchText.toLowerCase()
-            var nombreMatch = producto.nombre.toLowerCase().includes(textoSearch)
-            var codigoMatch = producto.codigo.toLowerCase().includes(textoSearch)
-            pasaFiltro = nombreMatch || codigoMatch
-        }
-        
-        if (pasaFiltro) {
-            productosFiltrados.push(producto)
-        }
-    }
-    
-    for (var k = 0; k < productosFiltrados.length; k++) {
-        productosFilteredModel.append(productosFiltrados[k])
-    }
-
-    console.log("✅ Filtro aplicado. Productos mostrados:", productosFiltrados.length)
-    
-    currentPage = 0
-    updatePaginatedModel()
-}
-
-function esProximoVencer(producto) {
-    if (!producto || !producto.codigo || !datosLotesCargados) return false
-    
-    for (var i = 0; i < lotesProximosVencer.length; i++) {
-        var lote = lotesProximosVencer[i]
-        // SIN CAJAS: solo cantidad unitaria
-        var stockLote = lote.Cantidad_Unitario || lote.Stock_Lote || 0
-        if (lote.Codigo === producto.codigo && stockLote > 0) {
-            return true
-        }
-    }     
-    return false
-}
-
-function esVencido(producto) {
-    if (!producto || !producto.codigo || !datosLotesCargados) return false
-    
-    for (var i = 0; i < lotesVencidos.length; i++) {
-        var lote = lotesVencidos[i]
-        // SIN CAJAS: solo cantidad unitaria
-        var stockLote = lote.Cantidad_Unitario || lote.Stock_Lote || 0
-        if (lote.Codigo === producto.codigo && stockLote > 0) {
-            return true
-        }
-    }     
-    return false
-}
-
-function esBajoStock(producto) {
-    if (!producto || !producto.codigo || !productosConLotesBajoStock) return false
-    
-    for (var i = 0; i < productosConLotesBajoStock.length; i++) {
-        var productoBajoStock = productosConLotesBajoStock[i]
-        if (productoBajoStock.Codigo === producto.codigo) {
-            return true
-        }
-    }
-    return false
-}
-
-function updatePaginatedModel() {
-    productosPaginadosModel.clear()
-    
-    var totalItems = productosFilteredModel.count
-    totalPages = Math.ceil(totalItems / itemsPerPage)
-    
-    if (currentPage >= totalPages && totalPages > 0) {
-        currentPage = totalPages - 1
-    }
-    if (currentPage < 0) {
-        currentPage = 0
-    }
-    
-    var startIndex = currentPage * itemsPerPage
-    var endIndex = Math.min(startIndex + itemsPerPage, totalItems)
-    
-    for (var i = startIndex; i < endIndex; i++) {
-        var producto = productosFilteredModel.get(i)
-        productosPaginadosModel.append(producto)
-    }
-}
-
-function guardarPrecioVenta() {
-    if (!productoSeleccionado) {
-        console.log("❌ No hay producto seleccionado")
-        return
-    }
-    
-    var nuevoPrecio = parseFloat(precioVentaEditField.text)
-    if (isNaN(nuevoPrecio) || nuevoPrecio <= 0) {
-        console.log("❌ Precio inválido:", precioVentaEditField.text)
-        return
-    }
-    
-    console.log("💰 Solicitando actualización de precio:", productoSeleccionado.codigo, "a Bs", nuevoPrecio)
-    
-    if (farmaciaData && farmaciaData.actualizarPrecioVentaProducto) {
-        var exito = farmaciaData.actualizarPrecioVentaProducto(productoSeleccionado.codigo, nuevoPrecio)
-        if (exito) {
-            editarPrecioDialogOpen = false
-            console.log("✅ Precio actualizado exitosamente en centro de datos")
-        } else {
-            console.log("❌ Error al actualizar precio en centro de datos")
-        }
-    } else {
-        console.log("❌ Función actualizarPrecioVentaProducto no disponible")
-    }
-}
-
-function obtenerMarcasModel() {
-    return marcasModel
-}
-
-function getStockColor(stock) {
-    if (stock <= 0) {
-        return dangerColor
-    } else if (stock <= 15) {
-        return "#8e44ad"
-    } else {
-        return successColor
-    }
-}
-
-property bool mostrandoMensaje: false
-property string mensajeTexto: ""
-property string mensajeTipo: "info" // "success", "error", "warning", "info"
-property color mensajeColor: blueColor
-
-Timer {
-    id: mensajeTimer
-    interval: 4000
-    onTriggered: mostrandoMensaje = false
-}
-
-function mostrarMensajeExito(mensaje) {
-    mensajeTexto = mensaje
-    mensajeTipo = "success"
-    mensajeColor = successColor
-    mostrandoMensaje = true
-    mensajeTimer.restart()
-    console.log("✅ Mensaje éxito:", mensaje)
-}
-
-function mostrarMensajeError(mensaje) {
-    mensajeTexto = mensaje
-    mensajeTipo = "error"
-    mensajeColor = dangerColor
-    mostrandoMensaje = true
-    mensajeTimer.restart()
-    console.log("❌ Mensaje error:", mensaje)
-}
-
-function mostrarMensajeWarning(mensaje) {
-    mensajeTexto = mensaje
-    mensajeTipo = "warning"
-    mensajeColor = warningColor
-    mostrandoMensaje = true
-    mensajeTimer.restart()
-    console.log("⚠️ Mensaje warning:", mensaje)
-}
-
-// FilterButton component
-component FilterButton: Rectangle {
-    property string text: ""
-    property int count: 0
-    property bool active: false
-    property color backgroundColor: blueColor
-    signal clicked()
-    
-    Layout.preferredHeight: 32
-    Layout.preferredWidth: implicitWidth + 16
-    
-    property int implicitWidth: textLabel.implicitWidth + countLabel.implicitWidth + 32
-    
-    color: active ? backgroundColor : "transparent"
-    border.color: backgroundColor
-    border.width: 2
-    radius: 16
-    
-    Behavior on color { ColorAnimation { duration: 200 } }
-    
-    RowLayout {
-        anchors.fill: parent
-        anchors.margins: 6
-        spacing: 6
-        
-        Label {
-            id: textLabel
-            text: parent.parent.text
-            color: active ? whiteColor : backgroundColor
-            font.bold: true
-            font.pixelSize: 11
-            Behavior on color { ColorAnimation { duration: 200 } }
-        }
-        
-        Rectangle {
-            id: countLabel
-            Layout.preferredWidth: 20
-            Layout.preferredHeight: 16
-            color: active ? whiteColor : backgroundColor
-            radius: 8
-            Behavior on color { ColorAnimation { duration: 200 } }
-            
-            Label {
-                anchors.centerIn: parent
-                text: parent.parent.parent.count.toString()
-                color: active ? backgroundColor : whiteColor
-                font.bold: true
-                font.pixelSize: 14
-                Behavior on color { ColorAnimation { duration: 200 } }
+        Qt.callLater(function() {
+            if (inventarioModel) {
+                precalcularStock()  // ✅ CALCULAR PRIMERO
+                cargarMarcasDesdeModel()
+                cargarDatosParaFiltros()
+                actualizarDesdeDataCentral()
             }
-        }
+        })
     }
-    
-    MouseArea {
-        anchors.fill: parent
-        onClicked: parent.clicked()
-    }
-}
 
-function cargarPreciosYMargenes() {
-    if (!productoData) return
-    
-    try {
-        // Precio de venta desde productoData
-        precioVenta = productoData.precioVenta || productoData.Precio_venta || 0.0
+    function actualizarConDatosFrescos() {
+        console.log("🔄 Forzando actualización con datos frescos...")
         
-        // ✅ NUEVO: Calcular costo promedio desde los lotes cargados
-        if (lotesData && lotesData.length > 0) {
-            var sumaCostos = 0
-            var totalUnidades = 0
+        if (!inventarioModel) {
+            console.log("❌ InventarioModel no disponible")
+            return
+        }
+        
+        _actualizandoDatos = true
+        
+        try {
+            // Clear current data
+            productosOriginales = []
             
-            for (var i = 0; i < lotesData.length; i++) {
-                var lote = lotesData[i]
-                var stock = lote.Stock_Lote || 0
-                var precio = lote.Precio_Compra || 0
-                
-                if (stock > 0) {
-                    sumaCostos += (stock * precio)
-                    totalUnidades += stock
+            // Force refresh from inventarioModel first
+            if (typeof inventarioModel.refresh_productos === 'function') {
+                inventarioModel.refresh_productos()
+            }
+            
+            // Then update from central data after a delay
+            Qt.callLater(function() {
+                if (farmaciaData) {
+                    var productos = farmaciaData.obtenerProductosParaInventario()
+                    console.log("📦 Productos obtenidos después de eliminar:", productos.length)
+                    
+                    // Deep copy
+                    var nuevosProductos = []
+                    for (var i = 0; i < productos.length; i++) {
+                        nuevosProductos.push(JSON.parse(JSON.stringify(productos[i])))
+                    }
+                    
+                    productosOriginales = nuevosProductos
+                    updateFilteredModel()
+                    
+                    console.log("✅ Interfaz actualizada con", productosOriginales.length, "productos")
                 }
-            }
-            
-            if (totalUnidades > 0) {
-                costoPromedio = sumaCostos / totalUnidades
-                console.log("💰 Costo promedio calculado desde lotes:", costoPromedio)
-            } else {
-                costoPromedio = 0
-                console.log("⚠️ No hay stock en lotes para calcular costo")
-            }
-        } else {
-            costoPromedio = 0
-            console.log("⚠️ No hay lotes para calcular costo promedio")
+            })
+        } catch (error) {
+            console.log("❌ Error en actualizarConDatosFrescos:", error)
         }
         
-        // Calcular margen
-        if (precioVenta > 0 && costoPromedio > 0) {
-            margenActual = precioVenta - costoPromedio
-            porcentajeMargen = (margenActual / costoPromedio) * 100
-        } else {
-            margenActual = 0
-            porcentajeMargen = 0
-        }
-        
-        console.log("📊 Precios y márgenes:")
-        console.log("   - Precio venta:", precioVenta)
-        console.log("   - Costo promedio:", costoPromedio)
-        console.log("   - Margen:", margenActual, "(", porcentajeMargen.toFixed(1), "%)")
-        
-    } catch (error) {
-        console.log("❌ Error calculando precios:", error.toString())
+        Qt.callLater(function() {
+            _actualizandoDatos = false
+        })
     }
-}
-
-function refrescarTablaCompleta() {
-    console.log("🔄 Refrescando tabla completa...")
-    
-    // 1. Obtener datos frescos
-    if (inventarioModel && typeof inventarioModel.refresh_productos === 'function') {
-        inventarioModel.refresh_productos()
-    }
-    
-    // 2. Esperar un momento y actualizar
-    Qt.callLater(function() {
-        // 3. Recargar todo
-        precalcularStock()
-        cargarDatosParaFiltros()
-        actualizarDesdeDataCentral()
-        
-        // 4. Forzar actualización de UI
-        productosPaginadosModel.clear()
-        updateFilteredModel()
-        
-        console.log("✅ Tabla refrescada completamente")
-    })
-}
-
-Component.onCompleted: {
-    console.log("📦 Módulo Productos FIFO 2.0 V2.0 iniciado")
-    console.log("   InventarioModel:", !!inventarioModel)
-    console.log("   FarmaciaData:", !!farmaciaData)
-    
-    Qt.callLater(function() {
-        if (inventarioModel) {
-            precalcularStock()  // ✅ CALCULAR PRIMERO
-            cargarMarcasDesdeModel()
-            cargarDatosParaFiltros()
-            actualizarDesdeDataCentral()
-        }
-    })
-}
 }

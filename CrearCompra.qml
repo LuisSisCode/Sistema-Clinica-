@@ -137,9 +137,25 @@ Item {
     function calcularPreciosAutomaticos() {
         if (inputCantidad > 0 && inputPrecioTotalCompra > 0) {
             inputPrecioUnitarioCalculado = inputPrecioTotalCompra / inputCantidad
-            // Si es primera compra, sugerir precio venta con 30% margen
+            console.log("📊 Cálculo precios:", {
+                cantidad: inputCantidad,
+                total: inputPrecioTotalCompra,
+                unitario: inputPrecioUnitarioCalculado,
+                precioVentaActual: inputPrecioVentaUnitario
+            })
+            
+            // Solo sugerir precio venta si es primera compra y no hay precio establecido
             if (esPrimeraCompra && inputPrecioVentaUnitario <= 0) {
-                inputPrecioVentaUnitario = Math.ceil(inputPrecioUnitarioCalculado * 1.3 * 20) / 20
+                var sugerido = Math.ceil(inputPrecioUnitarioCalculado * 1.3 * 20) / 20
+                inputPrecioVentaUnitario = sugerido
+                console.log("💰 Precio venta sugerido:", sugerido)
+                
+                // Actualizar campo visual
+                Qt.callLater(function() {
+                    if (precioVentaField) {
+                        precioVentaField.text = sugerido.toFixed(2)
+                    }
+                })
             }
         } else {
             inputPrecioUnitarioCalculado = 0
@@ -148,14 +164,38 @@ Item {
     }
     
     function validarProductoParaAgregar() {
+        // Para modo edición, el precio de venta puede ya existir o puede ser 0
+        var precioVentaValido = true
+        if (esPrimeraCompra) {
+            precioVentaValido = inputPrecioVentaUnitario > 0
+        }
+        
+        var nombreValido = inputProductName.trim().length > 0
+        var cantidadValida = inputCantidad > 0
+        var precioTotalValido = inputPrecioTotalCompra > 0
+        var vencimientoValido = (inputNoExpiry || (inputExpiryDate.length > 0 && validateExpiryDate(inputExpiryDate)))
+        var margenValido = inputPrecioVentaUnitario > inputPrecioUnitarioCalculado
+        
         productoValidoParaAgregar = (
-            inputProductName.trim().length > 0 &&
-            inputCantidad > 0 &&
-            inputPrecioTotalCompra > 0 &&
-            (inputNoExpiry || (inputExpiryDate.length > 0 && validateExpiryDate(inputExpiryDate))) &&
-            inputPrecioVentaUnitario > 0 &&
-            inputPrecioVentaUnitario > inputPrecioUnitarioCalculado
+            nombreValido &&
+            cantidadValida &&
+            precioTotalValido &&
+            vencimientoValido &&
+            precioVentaValido &&
+            margenValido
         )
+        
+        console.log("✅ Validación producto:", {
+            nombre: nombreValido,
+            cantidad: cantidadValida,
+            precioTotal: precioTotalValido,
+            vencimiento: vencimientoValido,
+            precioVenta: precioVentaValido,
+            margen: margenValido,
+            valido: productoValidoParaAgregar,
+            precioUnitario: inputPrecioUnitarioCalculado,
+            precioVentaInput: inputPrecioVentaUnitario
+        })
     }
     
     function buscarProductosExistentes(texto) {
@@ -212,15 +252,25 @@ Item {
                     inputPrecioVentaUnitario = datosProducto.precio_venta
                     console.log("💰 Precio venta auto-completado:", inputPrecioVentaUnitario)
                     
-                    // Actualizar campo visual inmediatamente
-                    if (precioVentaField) {
-                        precioVentaField.text = inputPrecioVentaUnitario.toFixed(2)
-                        console.log("✅ Campo precioVentaField actualizado")
-                    }
+                    // ✅ CORRECCIÓN: Actualizar campo visual inmediatamente usando Qt.callLater
+                    Qt.callLater(function() {
+                        if (precioVentaField) {
+                            precioVentaField.text = inputPrecioVentaUnitario.toFixed(2)
+                            console.log("✅ Campo precioVentaField actualizado:", precioVentaField.text)
+                        }
+                    })
+                } else {
+                    // Si no hay precio de venta, limpiar el campo
+                    inputPrecioVentaUnitario = 0
+                    Qt.callLater(function() {
+                        if (precioVentaField) {
+                            precioVentaField.text = ""
+                            console.log("❌ No hay precio venta, campo limpiado")
+                        }
+                    })
                 }
                 
-                // 3. NUEVA LÓGICA: Verificar si el producto NO tiene vencimiento conocido
-                // Consultar al backend para saber si este producto típicamente tiene vencimiento
+                // 3. Verificar si el producto NO tiene vencimiento conocido
                 var tieneVencimientoConocido = compraModel.verificarProductoTieneVencimiento(codigo)
                 
                 if (tieneVencimientoConocido === false) {
@@ -280,14 +330,17 @@ Item {
                 "Vencimiento": inputNoExpiry ? null : inputExpiryDate
             }
             
-            // ✅ CORRECCIÓN: ENVIAR PRECIO VENTA SIEMPRE
+            // ✅ ENVIAR PRECIO VENTA SIEMPRE
             if (inputPrecioVentaUnitario > 0) {
                 datosLote["Precio_Venta"] = inputPrecioVentaUnitario
                 console.log("💰 Precio venta enviado:", inputPrecioVentaUnitario)
+            } else {
+                console.log("⚠️ Precio venta es 0, no se enviará")
             }
             
             if (productoEditandoIndex >= 0) {
-                // EDITAR
+                // EDITAR - Usar el método del modelo
+                console.log("✏️ Editando producto en índice:", productoEditandoIndex)
                 var exito = compraModel.actualizar_item_compra(
                     productoEditandoIndex,
                     datosLote
@@ -297,10 +350,18 @@ Item {
                     showSuccess("✏️ Producto actualizado")
                     productoEditandoIndex = -1
                     limpiarFormulario()
+                    
+                    // ✅ FORZAR ACTUALIZACIÓN DE LA VISTA
+                    Qt.callLater(function() {
+                        if (compraModel) {
+                            compraModel.itemsCompraCambiado()
+                        }
+                    })
                     return true
                 }
             } else {
-                // AGREGAR
+                // AGREGAR NUEVO
+                console.log("➕ Agregando nuevo producto")
                 var agregado = compraModel.agregar_producto_a_compra(
                     inputProductCode,
                     datosLote
@@ -1023,6 +1084,7 @@ Item {
                                         }
                                         
                                         CheckBox {
+                                            id: noExpiryCheckbox
                                             text: "Sin venc."
                                             font.pixelSize: 12
                                             checked: inputNoExpiry
@@ -1228,13 +1290,27 @@ Item {
                                             horizontalAlignment: Text.AlignRight
                                         }
                                         
-                                        // ✅ PRECIO VENTA (NUEVA COLUMNA)
+                                        // ✅ PRECIO VENTA
                                         Label {
-                                            text: modelData.precio_venta ? "Bs " + modelData.precio_venta.toFixed(2) : "—"
-                                            color: modelData.precio_venta ? "#2e7d32" : darkGrayColor
-                                            font.bold: modelData.precio_venta ? true : false
-                                            font.pixelSize: fontMedium  // ✅ AUMENTADO
-                                            Layout.preferredWidth: 80  // ✅ AUMENTADO
+                                            text: {
+                                                var precio = modelData.precio_venta
+                                                if (precio !== undefined && precio !== null && parseFloat(precio) > 0) {
+                                                    return "Bs " + parseFloat(precio).toFixed(2)
+                                                } else {
+                                                    return "—"
+                                                }
+                                            }
+                                            color: {
+                                                var precio = modelData.precio_venta
+                                                if (precio !== undefined && precio !== null && parseFloat(precio) > 0) {
+                                                    return "#2e7d32"
+                                                } else {
+                                                    return darkGrayColor
+                                                }
+                                            }
+                                            font.bold: modelData.precio_venta !== undefined && modelData.precio_venta !== null && parseFloat(modelData.precio_venta) > 0
+                                            font.pixelSize: fontMedium
+                                            Layout.preferredWidth: 80
                                             horizontalAlignment: Text.AlignRight
                                         }
                                         
@@ -1296,9 +1372,13 @@ Item {
                                                     inputPrecioTotalCompra = modelData.subtotal || 0
                                                     inputPrecioUnitarioCalculado = modelData.precio_unitario || 0
                                                     
-                                                    // Precio de venta
-                                                    if (modelData.precio_venta && modelData.precio_venta > 0) {
-                                                        inputPrecioVentaUnitario = modelData.precio_venta
+                                                    // ✅ CORRECCIÓN: Precio de venta - usar correctamente el campo del modelo
+                                                    if (modelData.precio_venta !== undefined && modelData.precio_venta > 0) {
+                                                        inputPrecioVentaUnitario = parseFloat(modelData.precio_venta)
+                                                        console.log("💰 Precio venta cargado para edición:", inputPrecioVentaUnitario)
+                                                    } else {
+                                                        inputPrecioVentaUnitario = 0
+                                                        console.log("💰 No hay precio venta en el producto")
                                                     }
                                                     
                                                     // Fecha de vencimiento
@@ -1308,16 +1388,19 @@ Item {
                                                     
                                                     productoEditandoIndex = index
                                                     
-                                                    // Actualizar campos visuales
-                                                    if (productCodeField) productCodeField.text = inputProductName
-                                                    if (cantidadField) cantidadField.text = inputCantidad.toString()
-                                                    if (precioTotalField) precioTotalField.text = inputPrecioTotalCompra.toFixed(2)
-                                                    if (expiryField) expiryField.text = inputExpiryDate
-                                                    if (precioVentaField && inputPrecioVentaUnitario > 0) {
-                                                        precioVentaField.text = inputPrecioVentaUnitario.toFixed(2)
-                                                    }
-                                                    
-                                                    calcularPreciosAutomaticos()
+                                                    // ✅ CORRECCIÓN: Actualizar campos visuales usando Qt.callLater para asegurar que se actualicen
+                                                    Qt.callLater(function() {
+                                                        if (productCodeField) productCodeField.text = inputProductName
+                                                        if (cantidadField) cantidadField.text = inputCantidad.toString()
+                                                        if (precioTotalField) precioTotalField.text = inputPrecioTotalCompra.toFixed(2)
+                                                        if (expiryField) expiryField.text = inputExpiryDate
+                                                        if (precioVentaField) {
+                                                            precioVentaField.text = inputPrecioVentaUnitario > 0 ? inputPrecioVentaUnitario.toFixed(2) : ""
+                                                            console.log("✅ Campo precioVentaField actualizado a:", precioVentaField.text)
+                                                        }
+                                                        
+                                                        calcularPreciosAutomaticos()
+                                                    })
                                                 }
                                             }
                                             

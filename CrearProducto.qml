@@ -84,6 +84,7 @@ Rectangle {
     property int marcaIdSeleccionada: 0
     property string marcaSeleccionadaNombre: ""
     property bool marcasListenerConnected: false
+    
     // ===============================
     // PROPIEDADES DE GUARDADO
     // ===============================
@@ -118,110 +119,164 @@ Rectangle {
     // ===============================
     
     function generarCodigoAutomatico() {
-        return "PROD" + String(Date.now()).slice(-6)
+        var timestamp = Date.now()
+        var random = Math.floor(Math.random() * 1000)
+        return "PROD" + (timestamp % 1000000).toString() + random.toString().padStart(3, '0')
     }
 
     function validarNombreProducto() {
-        if (inputProductName.trim().length === 0) {
+        var nombre = inputProductName.trim()
+        
+        if (nombre.length === 0) {
             return {valido: false, mensaje: "El nombre del producto es obligatorio"}
         }
-        if (inputProductName.trim().length < 2) {
+        if (nombre.length < 2) {
             return {valido: false, mensaje: "El nombre del producto debe tener al menos 2 caracteres"}
         }
-        if (inputProductName.trim().length > 100) {
+        if (nombre.length > 100) {
             return {valido: false, mensaje: "El nombre del producto no puede exceder 100 caracteres"}
         }
+        
         return {valido: true, mensaje: ""}
     }
 
-    function validarMarca() {
-        console.log("🔍 Validando marca - ID:", marcaIdSeleccionada, "Nombre:", marcaSeleccionadaNombre)
-        
+    function validarMarcaDirecta() {
         if (marcaIdSeleccionada === 0 || !marcaSeleccionadaNombre) {
-            console.log("❌ Validación falló: Marca no seleccionada")
-            return {valido: false, mensaje: "Debe seleccionar una marca válida para el producto"}
+            return {valido: false, mensaje: "Debe seleccionar una marca válida"}
         }
         
-        // Verificar que la marca existe en el modelo
-        var marcaExiste = false
-        if (marcasModel && marcasModel.length > 0) {
-            for (var i = 0; i < marcasModel.length; i++) {
-                var marca = marcasModel[i]
-                if (marca.id === marcaIdSeleccionada) {
-                    marcaExiste = true
-                    break
-                }
+        // Consultar directamente al inventarioModel
+        if (inventarioModel) {
+            var marcas = inventarioModel.marcasDisponibles || []
+            var encontrada = marcas.some(function(marca) {
+                return marca.id === marcaIdSeleccionada
+            })
+            
+            if (encontrada) {
+                return {valido: true, mensaje: ""}
             }
         }
         
-        if (!marcaExiste) {
-            console.log("❌ Validación falló: Marca no encontrada en modelo")
-            return {valido: false, mensaje: "La marca seleccionada no es válida"}
-        }
-        
-        console.log("✅ Validación de marca exitosa")
-        return {valido: true, mensaje: ""}
+        return {valido: false, mensaje: "Marca no válida"}
     }
 
     function validarStockMinimo() {
         if (inputStockMinimo < 0) {
             return {valido: false, mensaje: "El stock mínimo no puede ser negativo"}
         }
+        if (inputStockMinimo > 9999) {
+            return {valido: false, mensaje: "El stock mínimo no puede exceder 9999 unidades"}
+        }
         return {valido: true, mensaje: ""}
     }
     
     // ===============================
-    // FUNCIÓN GUARDAR PRODUCTO
+    // FUNCIÓN GUARDAR PRODUCTO - CORREGIDA COMPLETAMENTE
     // ===============================
     function guardarProducto() {
-
+        console.log("💾 INICIANDO GUARDADO DE PRODUCTO FIFO 2.0")
+        
+        // Evitar múltiples clics
         if (guardando) {
             console.log("⏭️ Ya se está guardando, omitiendo...")
             return false
         }
         
         guardando = true
-        console.log("💾 Iniciando guardado de producto FIFO 2.0")
-        console.log("   - marcaIdSeleccionada:", marcaIdSeleccionada)
-        console.log("   - marcaSeleccionadaNombre:", marcaSeleccionadaNombre)
-        console.log("   - stockMinimo:", inputStockMinimo)
-        console.log("   - unidad_medida:", inputMeasureUnit)
+        
+        // 📊 DEBUG: Mostrar datos completos
+        console.log("   - Código:", inputProductCode)
+        console.log("   - Nombre:", inputProductName)
+        console.log("   - Marca ID:", marcaIdSeleccionada)
+        console.log("   - Marca Nombre:", marcaSeleccionadaNombre)
+        console.log("   - Stock mínimo:", inputStockMinimo)
+        console.log("   - Unidad medida:", inputMeasureUnit)
+        console.log("   - Precio compra:", inputPrecioCompra)
+        console.log("   - Precio venta:", inputPrecioVenta)
 
-        // ✅ VALIDACIÓN CRÍTICA DE MARCA
+        // ✅ VALIDACIÓN 1: MARCA (CORREGIDA - SIN DEPENDER DE marcasModel)
         if (marcaIdSeleccionada === 0 || !marcaSeleccionadaNombre) {
             console.log("❌ GUARDADO BLOQUEADO: Marca no seleccionada")
             showError("Debe seleccionar una marca válida para el producto")
             if (marcaComboBox) {
                 marcaComboBox.forceActiveFocus()
             }
+            guardando = false
+            return false
+        }
+        
+        // ✅ VALIDACIÓN 2: VERIFICAR MARCA EN SISTEMA (CONSULTA DIRECTA)
+        var marcaValida = false
+        if (inventarioModel && inventarioModel.marcasDisponibles) {
+            var marcas = inventarioModel.marcasDisponibles
+            console.log("🔍 Verificando marca ID", marcaIdSeleccionada, "en", marcas.length, "marcas disponibles")
+            
+            for (var i = 0; i < marcas.length; i++) {
+                var marca = marcas[i]
+                console.log("   - Marca #" + (i+1) + ": ID=" + marca.id + ", Nombre=" + marca.nombre)
+                if (marca.id === marcaIdSeleccionada) {
+                    marcaValida = true
+                    console.log("✅ Marca encontrada en sistema:", marca.nombre)
+                    break
+                }
+            }
+        }
+        
+        if (!marcaValida) {
+            console.log("❌ Marca ID", marcaIdSeleccionada, "no encontrada en sistema")
+            showError("La marca seleccionada no existe en el sistema. Por favor, seleccione una marca válida.")
+            if (marcaComboBox) {
+                marcaComboBox.forceActiveFocus()
+            }
+            guardando = false
             return false
         }
 
-        // Generar código automático si está vacío (solo en creación)
-        if (!modoEdicion && inputProductCode.trim().length === 0) {
+        // ✅ VALIDACIÓN 3: GENERAR CÓDIGO AUTOMÁTICO SI ES NECESARIO (SOLO EN CREACIÓN)
+        if (!modoEdicion && (!inputProductCode || inputProductCode.trim().length === 0)) {
             inputProductCode = generarCodigoAutomatico()
+            console.log("🔤 Código generado automáticamente:", inputProductCode)
             if (codigoField) {
                 codigoField.text = inputProductCode
             }
         }
 
-        // Validaciones específicas
+        // ✅ VALIDACIÓN 4: NOMBRE DEL PRODUCTO
         var validacionNombre = validarNombreProducto()
         if (!validacionNombre.valido) {
+            console.log("❌ Validación de nombre falló:", validacionNombre.mensaje)
             showError(validacionNombre.mensaje)
-            if (nombreField) nombreField.forceActiveFocus()
+            if (nombreField) {
+                nombreField.forceActiveFocus()
+            }
+            guardando = false
             return false
         }
 
-        var validacionMarca = validarMarca()
-        if (!validacionMarca.valido) {
-            showError(validacionMarca.mensaje)
-            return false
-        }
-
+        // ✅ VALIDACIÓN 5: STOCK MÍNIMO
         var validacionStockMin = validarStockMinimo()
         if (!validacionStockMin.valido) {
+            console.log("❌ Validación de stock mínimo falló:", validacionStockMin.mensaje)
             showError(validacionStockMin.mensaje)
+            if (stockMinimoField) {
+                stockMinimoField.forceActiveFocus()
+            }
+            guardando = false
+            return false
+        }
+
+        // ✅ VALIDACIÓN 6: PRECIOS (OPCIONAL EN CREACIÓN)
+        if (inputPrecioCompra < 0 || inputPrecioVenta < 0) {
+            console.log("❌ Los precios no pueden ser negativos")
+            showError("Los precios no pueden ser negativos")
+            guardando = false
+            return false
+        }
+
+        if (inputPrecioCompra > 0 && inputPrecioVenta > 0 && inputPrecioVenta <= inputPrecioCompra) {
+            console.log("❌ El precio de venta debe ser mayor al precio de compra")
+            showError("El precio de venta debe ser mayor al precio de compra")
+            guardando = false
             return false
         }
 
@@ -239,10 +294,14 @@ Rectangle {
         }
 
         console.log("📦 Producto a guardar:", JSON.stringify(producto))
+        console.log("   - Modo:", modoEdicion ? "EDICIÓN" : "CREACIÓN")
+        console.log("   - Usuario ID (si aplica):", inventarioModel ? inventarioModel.usuario_actual_id : "No disponible")
 
-        // GUARDAR EN BASE DE DATOS
+        // ✅ GUARDAR EN BASE DE DATOS
         if (!inventarioModel) {
-            showError("Sistema no disponible")
+            console.log("❌ InventarioModel no disponible")
+            showError("Sistema no disponible. Intente nuevamente.")
+            guardando = false
             return false
         }
 
@@ -250,47 +309,69 @@ Rectangle {
             var exito = false
             
             if (modoEdicion) {
-                console.log("✏️ Actualizando producto existente")
+                console.log("✏️ Actualizando producto existente...")
                 exito = inventarioModel.actualizar_producto(producto.codigo, JSON.stringify(producto))
                 
                 if (exito) {
-                    console.log("✅ Producto actualizado exitosamente")
+                    console.log("✅ Producto actualizado exitosamente:", producto.codigo)
                     showMessage("Producto actualizado correctamente")
                     
-                    // ✅ CORREGIDO: Solo emitir volverALista, NO productoActualizado
-                    // Esto evita el ciclo infinito
-                    volverALista()
+                    // Emitir señal de producto actualizado
+                    productoActualizado(producto)
+                    
+                    // Cerrar modal después de un breve retraso
+                    Qt.callLater(function() {
+                        volverALista()
+                    })
+                    
                 } else {
-                    showError("Error al actualizar el producto")
+                    console.log("❌ Error al actualizar el producto")
+                    showError("Error al actualizar el producto. Verifique los datos e intente nuevamente.")
                     guardando = false
                     return false
                 }
             } else {
-                console.log("🆕 Creando nuevo producto")
+                console.log("🆕 Creando nuevo producto...")
                 exito = inventarioModel.crear_producto(JSON.stringify(producto))
                 
                 if (exito) {
-                    console.log("✅ Producto creado exitosamente")
+                    console.log("✅ Producto creado exitosamente:", producto.codigo)
                     showMessage("Producto creado correctamente")
                     
-                    // ✅ CORREGIDO: Solo emitir volverALista
-                    volverALista()
+                    // Emitir señal de producto creado
+                    productoCreado(producto)
+                    
+                    // Cerrar modal después de un breve retraso
+                    Qt.callLater(function() {
+                        volverALista()
+                    })
+                    
                 } else {
-                    showError("Error al crear el producto")
+                    console.log("❌ Error al crear el producto")
+                    showError("Error al crear el producto. Verifique los datos e intente nuevamente.")
+                    guardando = false
                     return false
                 }
             }
+            
+            // Limpiar formulario después de éxito
+            Qt.callLater(function() {
+                if (!modoEdicion) {
+                    limpiarFormularioSeguro()
+                }
+            })
+            
             guardando = false
             return exito
             
         } catch (error) {
-            console.log("❌ Error guardando producto:", error.toString())
+            console.log("❌ Error en guardarProducto:", error.toString())
             showError("Error: " + error.toString())
             guardando = false
             return false
         }
     }
-
+    
     function limpiarFormularioSeguro() {
         try {
             inputProductCode = ""
@@ -298,6 +379,8 @@ Rectangle {
             inputProductDetails = ""
             inputMeasureUnit = "Tabletas"
             inputStockMinimo = 10
+            inputPrecioCompra = 0.0
+            inputPrecioVenta = 0.0
             marcaIdSeleccionada = 0
             marcaSeleccionadaNombre = ""
             
@@ -306,14 +389,18 @@ Rectangle {
             if (detallesField) detallesField.text = ""
             if (stockMinimoField) stockMinimoField.text = "10"
             if (unidadCombo) unidadCombo.currentIndex = 0
-            if (marcaComboBox) marcaComboBox.reset()
+            if (marcaComboBox) {
+                marcaComboBox.reset()
+                marcaComboBox.searchField.text = ""
+            }
             
             showSuccessMessage = false
             showErrorMessage = false
+            guardando = false
             
-            console.log("🧹 Formulario limpiado")
+            console.log("🧹 Formulario limpiado completamente")
         } catch (error) {
-            console.log("⚠️ Error en limpieza:", error)
+            console.log("⚠️ Error en limpieza de formulario:", error)
         }
     }
     
@@ -354,15 +441,25 @@ Rectangle {
         }
         
         try {
+            // ✅ FORZAR recarga de marcas
+            inventarioModel.refresh_marcas()
+            
             var marcasDisponibles = inventarioModel.marcasDisponibles || []
             console.log("🏷️ Marcas disponibles cargadas:", marcasDisponibles.length)
+            
+            // Mostrar las primeras 3 marcas para debug
+            for (var i = 0; i < Math.min(3, marcasDisponibles.length); i++) {
+                var marca = marcasDisponibles[i]
+                console.log("   " + (i+1) + ". ID: " + marca.id + ", Nombre: " + marca.nombre)
+            }
+            
             marcasModel = marcasDisponibles
             marcasCargadas = true
+            
         } catch (error) {
             console.log("❌ Error cargando marcas:", error)
         }
     }
-
     // ===============================
     // FUNCIÓN PARA CONFIGURAR MARCA
     // ===============================
@@ -445,8 +542,8 @@ Rectangle {
         }
         
         // ✅ PASO 3: Unidad de medida - CORREGIDO (manejar "Cápsula" vs "Cápsulas")
-        var unidades = ["Tabletas", "Cápsulas", "ml", "mg", "g", "Unidades", "Sobres", "Frascos"]
-        var unidadProducto = producto.unidad_medida || "Tabletas"
+        var unidades = ["Tableta", "Cápsulas", "ml", "mg", "g", "Unidad", "Sobres", "Frascos", "Tubo", "Inhalador", "Ampolla"]
+        var unidadProducto = producto.unidad_medida || "Tableta"
         
         // ⚠️ CORRECCIÓN CRÍTICA: Manejar "Cápsula" (singular) vs "Cápsulas" (plural)
         if (unidadProducto === "Cápsula") {
@@ -468,8 +565,8 @@ Rectangle {
             if (unidadCombo) {
                 unidadCombo.currentIndex = 0
             }
-            inputMeasureUnit = "Tabletas"
-            console.log("⚠️ Unidad no encontrada, usando Tabletas por defecto")
+            inputMeasureUnit = "Tableta"
+            console.log("⚠️ Unidad no encontrada, usando Tableta por defecto")
         }
         
         // ✅ PASO 4: Marca - USAR TIMER EN LUGAR DE setTimeout
@@ -1117,12 +1214,27 @@ Rectangle {
         console.log("   - InventarioModel:", !!inventarioModel)
         console.log("   - FarmaciaData:", !!farmaciaData)
         
-        // Si estamos en modo edición, inicializar con los datos del producto
+        // Cargar marcas inmediatamente
+        if (inventarioModel) {
+            console.log("🏷️ Cargando marcas disponibles...")
+            Qt.callLater(function() {
+                cargarMarcasDisponibles()
+            })
+        }
+        
+        // Inicializar según modo
         if (modoEdicion && productoData) {
             console.log("📝 Modo edición detectado, inicializando con datos del producto")
             Qt.callLater(function() {
                 inicializarParaEditar(productoData)
             })
+        } else {
+            console.log("🆕 Modo creación detectado")
+            // Generar código automático para nuevo producto
+            inputProductCode = generarCodigoAutomatico()
+            if (codigoField) {
+                codigoField.text = inputProductCode
+            }
         }
     }
 }

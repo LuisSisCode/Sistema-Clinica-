@@ -1275,3 +1275,67 @@ class ProductoRepository(BaseRepository):
             import traceback
             traceback.print_exc()
             return None
+        
+    def tiene_vencimiento_conocido(self, codigo: str) -> Optional[bool]:
+        """
+        Verifica si un producto típicamente tiene vencimiento basado en lotes anteriores.
+        
+        Args:
+            codigo: Código del producto
+            
+        Returns:
+            True: Si se encontró al menos un lote con fecha de vencimiento
+            False: Si se encontró al menos un lote SIN fecha de vencimiento
+            None: Si no hay lotes anteriores (no sabemos)
+        """
+        try:
+            # Primero obtener el producto por código
+            producto = self.get_by_codigo(codigo)
+            if not producto:
+                print(f"❌ Producto no encontrado: {codigo}")
+                return None
+            
+            producto_id = producto.get('id')
+            if not producto_id:
+                return None
+            
+            # Consultar los lotes anteriores de este producto
+            query = """
+            SELECT TOP 5 Fecha_Vencimiento
+            FROM Lote
+            WHERE Id_Producto = ?
+            ORDER BY Fecha_Creacion DESC
+            """
+            
+            resultados = self._execute_query(query, (producto_id,))
+            
+            if not resultados:
+                # No hay lotes anteriores, no sabemos
+                return None
+            
+            # Analizar los últimos lotes
+            tiene_vencimiento = False
+            sin_vencimiento = False
+            
+            for lote in resultados:
+                fecha_venc = lote.get('Fecha_Vencimiento')
+                if fecha_venc:
+                    tiene_vencimiento = True
+                else:
+                    sin_vencimiento = True
+            
+            # Lógica de decisión:
+            if tiene_vencimiento and not sin_vencimiento:
+                # Todos los lotes anteriores tienen vencimiento
+                return True
+            elif sin_vencimiento and not tiene_vencimiento:
+                # Todos los lotes anteriores NO tienen vencimiento
+                return False
+            else:
+                # Mixto o no sabemos claramente
+                # Por defecto, si alguno tiene vencimiento, asumimos que sí
+                return tiene_vencimiento
+                
+        except Exception as e:
+            print(f"❌ Error en tiene_vencimiento_conocido para {codigo}: {e}")
+            return None

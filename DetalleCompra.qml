@@ -533,27 +533,6 @@ Rectangle {
                                             horizontalAlignment: Text.AlignRight
                                         }
                                         
-                                        // BOTÓN EDITAR
-                                        Button {
-                                            Layout.preferredWidth: 32
-                                            Layout.preferredHeight: 32
-                                            
-                                            background: Rectangle {
-                                                color: parent.hovered ? hoverColor : "transparent"
-                                                radius: 4
-                                                border.color: parent.hovered ? headerColor : "transparent"
-                                                border.width: 1
-                                            }
-                                            
-                                            contentItem: Image {
-                                                source: "Resources/iconos/editar.svg"
-                                                sourceSize.width: 18
-                                                sourceSize.height: 18
-                                                fillMode: Image.PreserveAspectFit
-                                            }
-                                            
-                                            onClicked: abrirEditarLote(modelData)
-                                        }
                                     }
                                 }
                                 
