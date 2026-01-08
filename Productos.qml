@@ -215,30 +215,40 @@ Item {
     // ========================================
 
     function abrirEditarProducto(producto) {
-        console.log("✏️ Abriendo edición de producto:", producto.codigo)
+        console.log("✏️ Abriendo edición de producto ID:", producto.id, "Código:", producto.codigo)
         
-        // ✅ CARGAR MARCAS PRIMERO
-        if (!marcasYaCargadas) {
-            cargarMarcasDesdeModel()
+        // ✅ LLAMAR AL MÉTODO ESPECIALIZADO para obtener TODOS los datos
+        if (inventarioModel && typeof inventarioModel.get_producto_para_edicion === 'function') {
+            var productoCompleto = inventarioModel.get_producto_para_edicion(producto.id)
+            
+            if (!productoCompleto) {
+                console.error("❌ No se pudo obtener datos completos del producto")
+                return
+            }
+            
+            console.log("📊 Datos completos del producto:", JSON.stringify(productoCompleto, null, 2))
+            
+            // ✅ Ahora usa productoCompleto que tiene TODOS los campos
+            productoParaEditar = {
+                id: productoCompleto.id,
+                codigo: productoCompleto.codigo || "",
+                nombre: productoCompleto.nombre || "",
+                detalles: productoCompleto.detalles || "",
+                precio_compra: productoCompleto.precioCompra || 0,
+                precio_venta: productoCompleto.precioVenta || 0,
+                stock: productoCompleto.stockTotal || productoCompleto.stockUnitario || 0,
+                stockUnitario: productoCompleto.stockUnitario || 0,
+                marca: productoCompleto.marca_nombre || productoCompleto.Marca_Nombre || "",
+                marca_id: productoCompleto.ID_Marca || productoCompleto.id_marca || 0,
+                unidad_medida: productoCompleto.unidadMedida || "Tabletas",
+                stock_minimo: productoCompleto.Stock_Minimo || productoCompleto.stock_minimo || 10,
+                lotesTotales: productoCompleto.lotesTotales || 0
+            }
+            
+            modoEdicionProducto = true
+        } else {
+            console.error("❌ Método get_producto_para_edicion no disponible")
         }
-        
-        modoEdicionProducto = true
-        
-        // ✅ PREPARAR DATOS
-        productoParaEditar = {
-            id: producto.id,
-            codigo: producto.codigo || "",
-            nombre: producto.nombre || "",
-            detalles: producto.detalles || "",
-            precio_compra: producto.precioCompra || 0, 
-            precio_venta: producto.precioVenta || 0,   
-            stockUnitario: producto.stockUnitario || 0,
-            marca: producto.idMarca || "",              
-            unidad_medida: producto.unidadMedida || "Tabletas",
-            stockMinimo: producto.stockMinimo || 10
-        }
-        
-        console.log("📝 Datos preparados para edición:", JSON.stringify(productoParaEditar))
     }
     
     function cerrarEditarProducto() {
@@ -1879,7 +1889,7 @@ Item {
         Loader {
             id: crearProductoLoader
             anchors.fill: parent
-            active: false
+            active: modoEdicionProducto
             
             sourceComponent: modoEdicionProducto ? crearProductoComponent : null
             

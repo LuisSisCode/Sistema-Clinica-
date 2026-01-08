@@ -42,8 +42,12 @@ class ProductoRepository(BaseRepository):
         validate_required(codigo, "codigo")
         
         query = """
-        SELECT p.*, m.Nombre as Marca_Nombre, m.Detalles as Marca_Detalles,
-            ISNULL((SELECT SUM(l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) as Stock_Total
+        SELECT 
+            p.*, 
+            m.Nombre as Marca_Nombre, 
+            m.Detalles as Marca_Detalles,
+            ISNULL((SELECT SUM(l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) as Stock_Total,
+            p.Stock_Minimo  -- ¡AGREGAR EXPLÍCITAMENTE!
         FROM Productos p
         INNER JOIN Marca m ON p.ID_Marca = m.id
         WHERE p.Codigo = ?
@@ -56,6 +60,8 @@ class ProductoRepository(BaseRepository):
         SELECT 
             p.id, p.Codigo, p.Nombre, p.Detalles,
             p.Precio_compra, p.Precio_venta, p.Unidad_Medida,
+            p.Stock_Minimo,  -- ¡FALTABA ESTE CAMPO!
+            p.ID_Marca,      -- ¡FALTABA ESTE CAMPO!
             m.id as Marca_ID, m.Nombre as Marca_Nombre, m.Detalles as Marca_Detalles,
             ISNULL((SELECT SUM(l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) as Stock_Total,
             ISNULL((SELECT SUM(l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) as Stock_Unitario
@@ -221,6 +227,16 @@ class ProductoRepository(BaseRepository):
         
         try:
             resultado = self._execute_query(query, (producto_id,), use_cache=False) or []
+            
+            # ✅ CONVERTIR FECHAS A STRINGS ISO PARA QML
+            for lote in resultado:
+                # Convertir Fecha_Compra
+                if 'Fecha_Compra' in lote and lote['Fecha_Compra']:
+                    lote['Fecha_Compra'] = lote['Fecha_Compra'].isoformat()  # "2026-01-07"
+                
+                # Convertir Fecha_Vencimiento
+                if 'Fecha_Vencimiento' in lote and lote['Fecha_Vencimiento']:
+                    lote['Fecha_Vencimiento'] = lote['Fecha_Vencimiento'].isoformat()  # "2027-05-07"
             
             if resultado:
                 print(f"📦 Lotes del producto {producto_id}: {len(resultado)} lotes")
@@ -1184,3 +1200,49 @@ class ProductoRepository(BaseRepository):
             if fetch_one:
                 return None
             return []
+        
+    def get_producto_para_edicion(self, producto_id: int) -> Optional[Dict[str, Any]]:
+        """
+        🎯 Obtiene todos los datos necesarios para editar un producto
+        """
+        try:
+            query = """
+            SELECT 
+                p.id,
+                p.Codigo,
+                p.Nombre,
+                p.Detalles,
+                p.Precio_compra,
+                p.Precio_venta,
+                p.Unidad_Medida,
+                p.Stock_Minimo,
+                p.ID_Marca,
+                m.Nombre as Marca_Nombre,
+                m.Detalles as Marca_Detalles,
+                ISNULL((SELECT SUM(l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) as Stock_Total,
+                (SELECT COUNT(*) FROM Lote l WHERE l.Id_Producto = p.id) as Lotes_Totales,
+                (SELECT COUNT(*) FROM Lote l WHERE l.Id_Producto = p.id AND l.Cantidad_Unitario > 0) as Lotes_Activos
+            FROM Productos p
+            INNER JOIN Marca m ON p.ID_Marca = m.id
+            WHERE p.id = ?
+            """
+            
+            producto = self._execute_query(query, (producto_id,), fetch_one=True)
+            
+            if producto:
+                # Convertir a los nombres que espera QML
+                producto['stockUnitario'] = producto.get('Stock_Total', 0)
+                producto['stockTotal'] = producto.get('Stock_Total', 0)
+                producto['lotesTotales'] = producto.get('Lotes_Totales', 0)
+                producto['lotesActivos'] = producto.get('Lotes_Activos', 0)
+                
+                print(f"✅ Producto para edición: {producto.get('Codigo')}")
+                print(f"   - Stock mínimo: {producto.get('Stock_Minimo')}")
+                print(f"   - ID Marca: {producto.get('ID_Marca')}")
+                print(f"   - Lotes totales: {producto.get('Lotes_Totales')}")
+            
+            return producto
+            
+        except Exception as e:
+            print(f"❌ Error obteniendo producto para edición {producto_id}: {e}")
+            return None

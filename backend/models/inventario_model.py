@@ -1750,6 +1750,34 @@ class InventarioModel(QObject):
         except Exception as e:
             print(f"❌ Error en desconexión InventarioModel: {e}")
 
+    @Slot(int, result='QVariant')
+    def get_producto_para_edicion(self, producto_id: int):
+        """Obtiene todos los datos necesarios para editar un producto"""
+        try:
+            if producto_id <= 0:
+                return {}
+            
+            producto = self.producto_repo.get_producto_para_edicion(producto_id)
+            
+            if producto:
+                # Normalizar para QML
+                producto_normalizado = self._normalizar_producto(producto)
+                
+                # Asegurar que tenemos todos los campos
+                producto_normalizado.update({
+                    'stock_minimo': producto.get('Stock_Minimo', 10),
+                    'lotesTotales': producto.get('Lotes_Totales', 0),
+                    'stockTotal': producto.get('Stock_Total', 0)
+                })
+                
+                return producto_normalizado
+            else:
+                return {}
+                
+        except Exception as e:
+            print(f"❌ Error en get_producto_para_edicion: {e}")
+            return {}
+
 # Registrar el tipo para QML
 def register_inventario_model():
     qmlRegisterType(InventarioModel, "ClinicaModels", 1, 0, "InventarioModel")

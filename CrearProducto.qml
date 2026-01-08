@@ -75,6 +75,9 @@ Rectangle {
     property string inputMeasureUnit: "Tabletas"
     property string inputMarca: ""
     property int inputStockMinimo: 10
+    // ✅ NUEVO: Propiedades para precios (mantenerlos en edición)
+    property real inputPrecioCompra: 0.0
+    property real inputPrecioVenta: 0.0
 
     // ===============================
     // PROPIEDADES DE MARCA
@@ -211,8 +214,9 @@ Rectangle {
             marca_id: marcaIdSeleccionada,
             marca: marcaSeleccionadaNombre,
             stock_minimo: inputStockMinimo,
-            precio_compra: 0.0,
-            precio_venta: 0.0
+            // ✅ FIX: Mantener precios existentes en modo edición
+            precio_compra: inputPrecioCompra,
+            precio_venta: inputPrecioVenta
         }
 
         console.log("📦 Producto a guardar:", JSON.stringify(producto))
@@ -355,68 +359,96 @@ Rectangle {
     }
 
     function inicializarParaEditar(producto) {
-        console.log("✏️ Inicializando para EDITAR producto:", producto.codigo)
-        modoEdicion = true
-        productoData = producto
+        console.log("📝 Inicializando para editar:", producto.codigo)
+        console.log("   Datos recibidos:", JSON.stringify(producto))
         
-        // Cargar datos del producto
+        // ✅ CARGAR DATOS EN PROPERTIES
         inputProductCode = producto.codigo || ""
         inputProductName = producto.nombre || ""
         inputProductDetails = producto.detalles || ""
-        inputMeasureUnit = producto.unidad_medida || "Tabletas"
         inputStockMinimo = producto.stock_minimo || 10
+        inputPrecioCompra = producto.precio_compra || 0
+        inputPrecioVenta = producto.precio_venta || 0
         
-        // ✅ CORREGIR: Buscar marca_id si solo viene el nombre
-        var marcaNombre = producto.marca || ""
+        console.log("📋 Datos cargados en propiedades:")
+        console.log("   - Código:", inputProductCode)
+        console.log("   - Nombre:", inputProductName)
+        console.log("   - Stock mínimo:", inputStockMinimo)
+        console.log("   - Precio compra:", inputPrecioCompra)
+        console.log("   - Precio venta:", inputPrecioVenta)
+        
+        // ✅ CARGAR UNIDAD DE MEDIDA
+        var unidades = ["Tabletas", "Cápsulas", "ml", "mg", "g", "Unidades", "Sobres", "Frascos"]
+        var unidadProducto = producto.unidad_medida || "Tabletas"
+        var indexUnidad = unidades.indexOf(unidadProducto)
+        if (indexUnidad >= 0) {
+            unidadCombo.currentIndex = indexUnidad
+            inputMeasureUnit = unidadProducto
+            console.log("✅ Unidad de medida:", unidadProducto, "índice:", indexUnidad)
+        } else {
+            unidadCombo.currentIndex = 0
+            inputMeasureUnit = "Tabletas"
+            console.log("⚠️ Unidad no encontrada, usando Tabletas por defecto")
+        }
+        
+        // ✅ SELECCIONAR MARCA
         var marcaId = producto.marca_id || 0
+        var marcaNombre = producto.marca || ""
         
-        // Si no hay marca_id pero SÍ hay nombre de marca, buscarlo
-        if (marcaId === 0 && marcaNombre && marcasModel && marcasModel.length > 0) {
-            console.log("🔍 Buscando marca_id para:", marcaNombre)
+        console.log("🏷️ Buscando marca - ID:", marcaId, "Nombre:", marcaNombre)
+        
+        if (marcaId > 0 && marcaComboBox) {
+            // Buscar por ID
             for (var i = 0; i < marcasModel.length; i++) {
-                var marca = marcasModel[i]
-                if (marca && (marca.nombre === marcaNombre || marca.Nombre === marcaNombre)) {
-                    marcaId = marca.id || 0
-                    console.log("✅ Marca encontrada - ID:", marcaId)
+                if (marcasModel[i].id === marcaId) {
+                    marcaComboBox.seleccionarMarcaPorId(marcaId)
+                    marcaIdSeleccionada = marcaId
+                    marcaSeleccionadaNombre = marcasModel[i].nombre
+                    console.log("✅ Marca encontrada por ID:", marcasModel[i].nombre)
+                    break
+                }
+            }
+        } else if (marcaNombre && marcaComboBox) {
+            // Buscar por nombre
+            for (var j = 0; j < marcasModel.length; j++) {
+                if (marcasModel[j].nombre === marcaNombre) {
+                    marcaComboBox.seleccionarMarcaPorId(marcasModel[j].id)
+                    marcaIdSeleccionada = marcasModel[j].id
+                    marcaSeleccionadaNombre = marcaNombre
+                    console.log("✅ Marca encontrada por nombre:", marcaNombre)
                     break
                 }
             }
         }
         
-        marcaIdSeleccionada = marcaId
-        marcaSeleccionadaNombre = marcaNombre
-        
-        console.log("🏷️ Marca para edición - ID:", marcaIdSeleccionada, "Nombre:", marcaSeleccionadaNombre)
-        
-        // Actualizar UI
-        if (codigoField) {
-            codigoField.text = inputProductCode
-            codigoField.readOnly = true
+        if (marcaIdSeleccionada === 0 && marcasModel.length > 0) {
+            // Usar primera marca por defecto
+            marcaComboBox.seleccionarMarcaPorId(marcasModel[0].id)
+            marcaIdSeleccionada = marcasModel[0].id
+            marcaSeleccionadaNombre = marcasModel[0].nombre
+            console.log("⚠️ Usando primera marca por defecto:", marcaSeleccionadaNombre)
         }
-        if (nombreField) nombreField.text = inputProductName
-        if (detallesField) detallesField.text = inputProductDetails
-        if (stockMinimoField) stockMinimoField.text = inputStockMinimo.toString()
         
-        // Buscar índice de unidad de medida
-        if (unidadCombo) {
-            var unidades = ["Tabletas", "Cápsulas", "ml", "mg", "g", "Unidades", "Sobres", "Frascos", "Ampollas", "Jeringas"]
-            var indice = unidades.indexOf(inputMeasureUnit)
-            if (indice !== -1) {
-                unidadCombo.currentIndex = indice
+        // ✅ FORZAR ACTUALIZACIÓN DE CAMPOS VISUALES
+        Qt.callLater(function() {
+            if (codigoField) {
+                codigoField.text = inputProductCode
+                console.log("✅ Campo código actualizado:", inputProductCode)
             }
-        }
-        
-        // Cargar marcas y seleccionar la correcta
-        cargarMarcasDisponibles()
-        
-        if (marcaComboBox && marcaIdSeleccionada > 0) {
-            Qt.callLater(function() {
-                console.log("🎯 Llamando a forzarSeleccion:", marcaIdSeleccionada, marcaSeleccionadaNombre)
-                marcaComboBox.forzarSeleccion(marcaIdSeleccionada, marcaSeleccionadaNombre)
-            })
-        } else {
-            console.log("⚠️ No se puede forzar selección - ID:", marcaIdSeleccionada)
-        }
+            if (nombreField) {
+                nombreField.text = inputProductName
+                console.log("✅ Campo nombre actualizado:", inputProductName)
+            }
+            if (detallesField) {
+                detallesField.text = inputProductDetails
+                console.log("✅ Campo detalles actualizado:", inputProductDetails)
+            }
+            if (stockMinimoField) {
+                stockMinimoField.text = inputStockMinimo.toString()
+                console.log("✅ Campo stock mínimo actualizado:", inputStockMinimo)
+            }
+            console.log("✅ Campos visuales actualizados completamente")
+        })
     }
     // ===============================
     // MODAL CENTRADO
@@ -585,6 +617,126 @@ Rectangle {
                         }
                         
                         // ===============================
+                        // 📊 INFORMACIÓN CONTEXTUAL (SOLO EN EDICIÓN)
+                        // ===============================
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: infoColumn.implicitHeight + 20
+                            color: "#FEF3C7"
+                            border.color: "#F59E0B"
+                            border.width: 1
+                            radius: 6
+                            visible: modoEdicion
+                            
+                            ColumnLayout {
+                                id: infoColumn
+                                anchors.fill: parent
+                                anchors.margins: 12
+                                spacing: 8
+                                
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 8
+                                    
+                                    Text {
+                                        text: "📊"
+                                        font.pixelSize: 16
+                                    }
+                                    
+                                    Text {
+                                        text: "INFORMACIÓN ACTUAL DEL PRODUCTO"
+                                        font.pixelSize: 12
+                                        font.bold: true
+                                        color: "#92400E"
+                                    }
+                                }
+                                
+                                // Grid de información
+                                GridLayout {
+                                    Layout.fillWidth: true
+                                    columns: 2
+                                    rowSpacing: 6
+                                    columnSpacing: 20
+                                    
+                                    // Stock
+                                    RowLayout {
+                                        spacing: 6
+                                        Text {
+                                            text: "📦 Stock:"
+                                            font.pixelSize: 11
+                                            color: "#92400E"
+                                        }
+                                        Text {
+                                            text: productoData ? (productoData.stock || productoData.stockUnitario || "0") + " " + (productoData.unidad_medida || "unidades") : "0 unidades"
+                                            font.pixelSize: 11
+                                            font.bold: true
+                                            color: "#78350F"
+                                        }
+                                    }
+                                    
+                                    // Precio Venta
+                                    RowLayout {
+                                        spacing: 6
+                                        Text {
+                                            text: "💰 Precio Venta:"
+                                            font.pixelSize: 11
+                                            color: "#92400E"
+                                        }
+                                        Text {
+                                            text: productoData ? "Bs " + (productoData.precioVenta || productoData.precio_venta || "0.00").toFixed(2) : "Bs 0.00"
+                                            font.pixelSize: 11
+                                            font.bold: true
+                                            color: "#78350F"
+                                        }
+                                    }
+                                    
+                                    // Lotes Totales
+                                    RowLayout {
+                                        spacing: 6
+                                        Text {
+                                            text: "📋 Lotes:"
+                                            font.pixelSize: 11
+                                            color: "#92400E"
+                                        }
+                                        Text {
+                                            text: productoData ? (productoData.lotesTotales || "0") + " registrados" : "0 registrados"
+                                            font.pixelSize: 11
+                                            font.bold: true
+                                            color: "#78350F"
+                                        }
+                                    }
+                                    
+                                    // Código
+                                    RowLayout {
+                                        spacing: 6
+                                        Text {
+                                            text: "🏷️ Código:"
+                                            font.pixelSize: 11
+                                            color: "#92400E"
+                                        }
+                                        Text {
+                                            text: productoData ? (productoData.codigo || "N/A") : "N/A"
+                                            font.pixelSize: 11
+                                            font.bold: true
+                                            color: "#78350F"
+                                        }
+                                    }
+                                }
+                                
+                                // Nota importante
+                                Text {
+                                    Layout.fillWidth: true
+                                    Layout.topMargin: 4
+                                    text: "💡 Los precios y stock se gestionan desde Compras y Lotes"
+                                    font.pixelSize: 10
+                                    font.italic: true
+                                    color: "#92400E"
+                                    wrapMode: Text.WordWrap
+                                }
+                            }
+                        }
+                        
+                        // ===============================
                         // FILA 1: Código, Nombre, Marca
                         // ===============================
                         RowLayout {
@@ -606,28 +758,40 @@ Rectangle {
                                 Rectangle {
                                     Layout.fillWidth: true
                                     Layout.preferredHeight: inputHeight
-                                    color: modoEdicion ? grayLight : white
-                                    border.color: codigoField.activeFocus ? primaryBlue : borderColor
+                                    color: modoEdicion ? "#F3F4F6" : white
+                                    border.color: modoEdicion ? "#D1D5DB" : (codigoField.activeFocus ? primaryBlue : borderColor)
                                     border.width: 1
                                     radius: 6
                                     
-                                    TextInput {
-                                        id: codigoField
+                                    RowLayout {
                                         anchors.fill: parent
                                         anchors.margins: 8
-                                        verticalAlignment: TextInput.AlignVCenter
-                                        selectByMouse: true
-                                        font.pixelSize: 11
-                                        color: grayDark
-                                        readOnly: modoEdicion
+                                        spacing: 6
                                         
-                                        onTextChanged: inputProductCode = text
-                                        
+                                        // 🔒 Icono de candado (solo en modo edición)
                                         Text {
-                                            text: "Auto"
-                                            color: grayMedium
-                                            visible: !parent.text && !modoEdicion
+                                            text: "🔒"
+                                            font.pixelSize: 12
+                                            visible: modoEdicion
+                                        }
+                                        
+                                        TextInput {
+                                            id: codigoField
+                                            Layout.fillWidth: true
+                                            verticalAlignment: TextInput.AlignVCenter
+                                            selectByMouse: true
                                             font.pixelSize: 11
+                                            color: modoEdicion ? "#9CA3AF" : grayDark
+                                            readOnly: modoEdicion
+                                            
+                                            onTextChanged: inputProductCode = text
+                                            
+                                            Text {
+                                                text: "Auto"
+                                                color: grayMedium
+                                                visible: !parent.text && !modoEdicion
+                                                font.pixelSize: 11
+                                            }
                                         }
                                     }
                                 }

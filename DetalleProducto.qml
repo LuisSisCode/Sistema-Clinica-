@@ -2,9 +2,6 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 
-// 🔍 DETALLEPRODUCTO.QML - FIFO 2.0 (VISUALIZACIÓN DE HISTORIAL)
-// ✅ VERSIÓN MEJORADA - SIN CANTIDAD INICIAL, MEJOR VISUALIZACIÓN
-
 Rectangle {
     id: detalleProductoComponent
     anchors.fill: parent
@@ -187,21 +184,61 @@ Rectangle {
     }
     
     function formatearFecha(fecha) {
-        // 📅 Maneja fechas NULL correctamente
         if (!fecha) return "---"
         
         try {
-            var fechaObj = new Date(fecha)
-            // Verificar si es una fecha válida (no NULL convertido a epoch)
-            var year = fechaObj.getFullYear()
-            if (year < 2000 || year > 2100) return "---"
+            var year, month, day
             
-            return fechaObj.toLocaleDateString('es-ES', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric'
-            })
+            // ✅ SOLUCIÓN: Acceder directamente a propiedades de Python datetime.date
+            // Python datetime.date tiene: year, month, day
+            if (typeof fecha.year !== 'undefined' && 
+                typeof fecha.month !== 'undefined' && 
+                typeof fecha.day !== 'undefined') {
+                // Es un objeto Python datetime.date
+                year = fecha.year
+                month = fecha.month
+                day = fecha.day
+            } else {
+                // Intentar como string (fallback)
+                var fechaStr = fecha.toString()
+                
+                // Si contiene "datetime" o "PyObject", no podemos parsear
+                if (fechaStr.includes('datetime') || fechaStr.includes('PyObject')) {
+                    console.log("⚠️ Fecha es objeto Python sin propiedades accesibles")
+                    return "---"
+                }
+                
+                // Extraer solo fecha (sin hora)
+                if (fechaStr.includes('T')) {
+                    fechaStr = fechaStr.split('T')[0]
+                }
+                if (fechaStr.includes(' ')) {
+                    fechaStr = fechaStr.split(' ')[0]
+                }
+                
+                // Parsear YYYY-MM-DD
+                var partes = fechaStr.split('-')
+                if (partes.length !== 3) return "---"
+                
+                year = parseInt(partes[0])
+                month = parseInt(partes[1])
+                day = parseInt(partes[2])
+            }
+            
+            // Validar
+            if (isNaN(year) || isNaN(month) || isNaN(day)) return "---"
+            if (year < 2000 || year > 2100) return "---"
+            if (month < 1 || month > 12) return "---"
+            if (day < 1 || day > 31) return "---"
+            
+            // Formatear a dd/mm/yyyy
+            var dayStr = day.toString().padStart(2, '0')
+            var monthStr = month.toString().padStart(2, '0')
+            
+            return dayStr + '/' + monthStr + '/' + year
+            
         } catch (e) {
+            console.log("❌ Error formateando fecha:", e)
             return "---"
         }
     }
@@ -250,35 +287,24 @@ Rectangle {
             if (resultado) {
                 console.log("✅ Precio actualizado en BD")
                 
-                // ✅ AGREGAR ESTAS LÍNEAS:
-                console.log("🔄 Refrescando datos del producto desde BD...")
+                // ✅ ACTUALIZACIÓN OPTIMIZADA: Solo actualizar el precio
+                precioVenta = precio
                 
-                // Recargar producto completo desde BD
-                var productoActualizado = inventarioModel.get_producto_by_codigo(productoData.codigo)
-                
-                if (productoActualizado) {
-                    // Actualizar productoData con datos frescos
-                    productoData = productoActualizado
-                    
-                    // Actualizar property local
-                    precioVenta = productoData.Precio_venta || productoData.precioVenta || precio
-                    
-                    console.log("✅ UI actualizada - Precio:", precioVenta)
-                    
-                    // Emitir señal
-                    productoActualizado(productoData)
-                } else {
-                    console.log("⚠️ No se pudo recargar producto, actualizando localmente")
-                    precioVenta = precio
-                    if (productoData) {
-                        productoData.precioVenta = precio
-                        productoData.Precio_venta = precio
-                    }
+                // Actualizar propiedades del objeto productoData directamente
+                // SIN reasignarlo (para no disparar onProductoDataChanged)
+                if (productoData) {
+                    productoData.precioVenta = precio
+                    productoData.Precio_venta = precio
                 }
+                
+                console.log("✅ Precio actualizado en UI sin recargar datos")
+                
+                // Emitir señal con datos actualizados
+                productoActualizado(productoData)
                 
                 return true
             } else {
-                console.log("❌ Error actualizando precio")
+                console.log("❌ Error actualizando precio en BD")
                 return false
             }
             
@@ -667,7 +693,14 @@ Rectangle {
                                 }
                                 
                                 Label {
-                                    text: productoData ? (productoData.stockUnitario || 0) : "0"
+                                    text: {
+                                        if (!lotesData || lotesData.length === 0) return "0"
+                                        var total = 0
+                                        for (var i = 0; i < lotesData.length; i++) {
+                                            total += (lotesData[i].Stock_Lote || 0)
+                                        }
+                                        return total
+                                    }
                                     font.pixelSize: 14
                                     font.bold: true
                                     color: "#2C3E50"
