@@ -191,25 +191,79 @@ Item {
     }
 
     function seleccionarProductoExistente(productoId, codigo, nombre) {
+        console.log("🎯 Seleccionando producto:", codigo, nombre)
+        
         inputProductId = productoId
         inputProductCode = codigo
         inputProductName = nombre
         
-        if (compraModel && productoId > 0) {
-            var datosProducto = compraModel.obtener_datos_precio_producto(productoId)
-            if (datosProducto) {
+        // Obtener datos del producto incluyendo información de vencimiento
+        if (compraModel && inputProductCode) {
+            var datosProducto = compraModel.obtener_datos_precio_producto(inputProductCode)
+            
+            console.log("📊 Datos del producto obtenidos:", JSON.stringify(datosProducto))
+            
+            if (datosProducto && Object.keys(datosProducto).length > 0) {
+                // 1. Establecer si es primera compra
                 esPrimeraCompra = datosProducto.es_primera || false
-                if (!esPrimeraCompra && datosProducto.precio_venta) {
+                
+                // 2. Auto-completar precio de venta SIEMPRE que exista
+                if (datosProducto.precio_venta && datosProducto.precio_venta > 0) {
                     inputPrecioVentaUnitario = datosProducto.precio_venta
+                    console.log("💰 Precio venta auto-completado:", inputPrecioVentaUnitario)
+                    
+                    // Actualizar campo visual inmediatamente
+                    if (precioVentaField) {
+                        precioVentaField.text = inputPrecioVentaUnitario.toFixed(2)
+                        console.log("✅ Campo precioVentaField actualizado")
+                    }
                 }
+                
+                // 3. NUEVA LÓGICA: Verificar si el producto NO tiene vencimiento conocido
+                // Consultar al backend para saber si este producto típicamente tiene vencimiento
+                var tieneVencimientoConocido = compraModel.verificarProductoTieneVencimiento(codigo)
+                
+                if (tieneVencimientoConocido === false) {
+                    // Si sabemos que NO tiene vencimiento, marcar automáticamente
+                    inputNoExpiry = true
+                    inputExpiryDate = ""
+                    console.log("📅 Producto sin vencimiento conocido - Campo desactivado automáticamente")
+                    
+                    // Actualizar UI
+                    if (expiryField) {
+                        expiryField.text = ""
+                        expiryField.enabled = false
+                    }
+                    
+                    // Marcar checkbox "Sin venc." como checked
+                    if (noExpiryCheckbox) {
+                        noExpiryCheckbox.checked = true
+                    }
+                } else if (tieneVencimientoConocido === true) {
+                    // Si SABEMOS que tiene vencimiento, mantener campo activo
+                    inputNoExpiry = false
+                    console.log("📅 Producto con vencimiento conocido - Campo activado")
+                    
+                    if (expiryField) {
+                        expiryField.enabled = true
+                    }
+                    
+                    if (noExpiryCheckbox) {
+                        noExpiryCheckbox.checked = false
+                    }
+                }
+                // Si es null (no sabemos), dejar que el usuario decida
             }
         }
         
         showProductDropdown = false
+        
+        // Enfocar campo de cantidad después de seleccionar
         Qt.callLater(function() {
             if (cantidadField) {
                 cantidadField.focus = true
                 cantidadField.selectAll()
+                console.log("🎯 Enfocando campo cantidad")
             }
         })
     }
@@ -317,16 +371,16 @@ Item {
     
     function completarCompra() {
         if (!compraModel || !providerCombo || providerCombo.currentIndex <= 0) {
-            showSuccess("Error: Complete todos los campos")
+            showError("Error: Complete todos los campos")
             return false
         }
         
         if (productoEditandoIndex >= 0) {
-            showSuccess("Termine de editar el producto primero")
+            showError("Termine de editar el producto primero")
             return false
         }
         
-        // Modo creación
+        // Obtener ID del proveedor
         var proveedor_id = 0
         var proveedores = compraModel.proveedores
         for (var i = 0; i < proveedores.length; i++) {
@@ -338,49 +392,19 @@ Item {
         }
         
         if (proveedor_id <= 0) {
-            showSuccess("Error: Proveedor no válido")
+            showError("Error: Proveedor no válido")
             return false
         }
         
-        var detalles = []
-        var items = compraModel.items_compra
+        // Usar el método CORRECTO: completar_compra
+        var resultado = compraModel.completar_compra(proveedor_id)
         
-        for (var j = 0; j < items.length; j++) {
-            var item = items[j]
-            var detalle = {
-                "Id_Producto": item.producto_id || 0,
-                "Cantidad": item.cantidad || 0,
-                "Precio_Unitario": item.precio_unitario || 0.0
-            }
-            
-            if (item.vencimiento && item.vencimiento !== "" && item.vencimiento !== "Sin vencimiento") {
-                detalle["Fecha_Vencimiento"] = item.vencimiento
-            }
-            
-            // ✅ CORRECCIÓN: AGREGAR PRECIO VENTA SIEMPRE
-            if (item.precio_venta && item.precio_venta > 0) {
-                detalle["Precio_Venta"] = item.precio_venta
-            }
-            
-            detalles.push(detalle)
-        }
-        
-        var usuario_id = compraModel.usuario_actual_id
-        var resultado = compraModel.registrar_compra_fifo_v2(
-            proveedor_id,
-            usuario_id,
-            JSON.stringify(detalles)
-        )
-        
-        if (resultado && resultado.exito) {
-            var id_compra = resultado.id_compra || 0
-            var total = resultado.total || 0.0
-            showSuccess(`✅ Compra #${id_compra}: Bs${total.toFixed(2)}`)
+        if (resultado) {
+            showSuccess("✅ Compra completada exitosamente")
             limpiarFormulario()
             return true
         } else {
-            var errorMsg = resultado ? resultado.mensaje : "Error desconocido"
-            showSuccess(`Error: ${errorMsg}`)
+            showError("❌ Error al completar la compra")
             return false
         }
     }
@@ -1264,10 +1288,10 @@ Item {
                                                 
                                                 onClicked: {
                                                     console.log("📝 Editando producto:", index)
-                                                    // Cargar datos para edición
+                                                    
+                                                    // Usar código, no ID (los items no tienen ID, solo código)
                                                     inputProductCode = modelData.codigo || ""
                                                     inputProductName = modelData.nombre || ""
-                                                    inputProductId = modelData.id || 0
                                                     inputCantidad = modelData.cantidad || 0
                                                     inputPrecioTotalCompra = modelData.subtotal || 0
                                                     inputPrecioUnitarioCalculado = modelData.precio_unitario || 0

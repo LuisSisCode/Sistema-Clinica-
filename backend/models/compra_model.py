@@ -271,28 +271,46 @@ class CompraModel(QObject):
         
         try:
             termino = termino.lower().strip()
-            productos = safe_execute(
+            
+            # Buscar por código
+            productos_por_codigo = safe_execute(
                 lambda: self.producto_repo.search(termino)
             ) or []
             
-            print(f"🔍 Búsqueda '{termino}': {len(productos)} productos encontrados")
-            return productos
+            # Buscar por nombre (si no hay resultados por código)
+            if not productos_por_codigo:
+                productos_por_codigo = safe_execute(
+                    lambda: self.producto_repo.search_by_name(termino)
+                ) or []
+            
+            print(f"🔍 Búsqueda '{termino}': {len(productos_por_codigo)} productos encontrados")
+            return productos_por_codigo
             
         except Exception as e:
             print(f"❌ Error en búsqueda: {e}")
             return []
     
+    # En compra_model.py, modificar el método obtener_datos_precio_producto:
     @Slot(str, result='QVariantMap')
-    def obtener_datos_precio_producto(self, codigo: str):
-        """Obtiene datos de precio del producto por código"""
+    def obtener_datos_precio_producto(self, codigo_o_id: str):
+        """Obtiene datos de precio del producto por código o ID"""
         try:
-            producto = safe_execute(
-                lambda: self.producto_repo.get_by_codigo(codigo)
-            )
+            producto = None
+            
+            # Si es numérico, tratar como ID
+            if codigo_o_id.isdigit():
+                producto = safe_execute(
+                    lambda: self.producto_repo.get_by_id(int(codigo_o_id))
+                )
+            else:
+                # Si no es numérico, tratar como código
+                producto = safe_execute(
+                    lambda: self.producto_repo.get_by_codigo(codigo_o_id)
+                )
             
             if not producto:
-                print(f"❌ Producto no encontrado: {codigo}")
-                self.operacionError.emit(f"Producto no encontrado: {codigo}")
+                print(f"❌ Producto no encontrado: {codigo_o_id}")
+                self.operacionError.emit(f"Producto no encontrado: {codigo_o_id}")
                 return {}
             
             # Verificar si es primera compra (precio_venta = 0 o NULL)
@@ -300,14 +318,14 @@ class CompraModel(QObject):
             es_primera_compra = precio_venta_actual == 0
             
             resultado = {
-                "codigo": codigo,
+                "codigo": producto.get('Codigo', ''),
                 "nombre": producto.get('Nombre', ''),
                 "precio_venta": precio_venta_actual,
                 "es_primera": es_primera_compra,
                 "unidad_medida": producto.get('Unidad_Medida', 'Unidades')
             }
             
-            print(f"📦 Datos producto {codigo}: {resultado}")
+            print(f"📦 Datos producto {codigo_o_id}: {resultado}")
             return resultado
             
         except Exception as e:
@@ -600,6 +618,31 @@ class CompraModel(QObject):
         except Exception as e:
             print(f"❌ Error cargando detalle: {e}")
             self.operacionError.emit(f"Error: {str(e)}")
+
+    @Slot(str, result='QVariant')
+    def verificarProductoTieneVencimiento(self, codigo: str):
+        """
+        Verifica si un producto típicamente tiene vencimiento.
+        QML-friendly: Retorna bool o None (QVariant se convierte apropiadamente)
+        """
+        try:
+            if not codigo or not self.producto_repo:
+                print(f"⚠️ Código vacío o repo no disponible: {codigo}")
+                return None
+            
+            print(f"🔍 Verificando vencimiento para producto: {codigo}")
+            
+            # Usar el método del repositorio
+            resultado = safe_execute(
+                lambda: self.producto_repo.tiene_vencimiento_conocido(codigo)
+            )
+            
+            print(f"📅 Resultado vencimiento {codigo}: {resultado}")
+            return resultado
+            
+        except Exception as e:
+            print(f"❌ Error en verificarProductoTieneVencimiento: {e}")
+            return None
 
 def register_compra_model():
     """Registra el modelo para uso en QML"""

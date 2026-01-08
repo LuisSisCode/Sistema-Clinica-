@@ -1429,36 +1429,6 @@ Item {
                 }
             }
             
-            // PIE DEL MODAL - BOTONES DE ACCIÓN
-            RowLayout {
-                Layout.fillWidth: true
-                
-                Item { Layout.fillWidth: true }
-                
-                // REEMPLAZADO CON RECTANGLE + MOUSEAREA
-                Rectangle {
-                    Layout.preferredWidth: baseUnit * 20
-                    Layout.preferredHeight: baseUnit * 8
-                    color: cerrarBtnMouseArea.pressed ? "#5a6268" : "#6c757d"
-                    radius: radiusMedium
-                    border.color: "#495057"
-                    border.width: 1
-                    
-                    Label {
-                        anchors.centerIn: parent
-                        text: "Cerrar"
-                        color: "#ffffff"
-                        font.bold: true
-                        font.pixelSize: fontMedium
-                    }
-                    
-                    MouseArea {
-                        id: cerrarBtnMouseArea
-                        anchors.fill: parent
-                        onClicked: detalleVentaDialogOpen = false
-                    }
-                }
-            }
         }
     }
     function editarVenta(ventaId) {

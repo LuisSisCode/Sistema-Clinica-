@@ -1058,9 +1058,10 @@ class InventarioModel(QObject):
                 print(f"❌ Producto no encontrado: {codigo}")
                 return {}
             
+            # ✅ Usar la normalización mejorada
             producto = self._normalizar_producto(producto_raw)
             
-            # ✅ CORRECCIÓN: Usar get_lotes_producto_completo_fifo para obtener TODOS los lotes
+            # ✅ Obtener TODOS los lotes (incluyendo agotados)
             lotes = self.producto_repo.get_lotes_producto_completo_fifo(producto['id']) or []
             
             # ✅ Validar que lotes es una lista
@@ -1068,9 +1069,11 @@ class InventarioModel(QObject):
                 print(f"⚠️ Lotes retornó tipo incorrecto: {type(lotes)}")
                 lotes = []
             
+            # ✅ Calcular estadísticas COMPLETAS
             stock_total = 0
             lotes_vencidos = 0
             lotes_por_vencer = 0
+            lotes_activos = 0
             
             from datetime import datetime
             hoy = datetime.now()
@@ -1081,32 +1084,67 @@ class InventarioModel(QObject):
                 stock_total += stock_lote
                 
                 if stock_lote > 0:
+                    lotes_activos += 1
+                
+                if stock_lote > 0:
                     fecha_venc = lote.get('Fecha_Vencimiento')
                     if fecha_venc:
                         try:
-                            vencimiento = datetime.strptime(fecha_venc, '%Y-%m-%d') if isinstance(fecha_venc, str) else fecha_venc
+                            # Convertir string a datetime si es necesario
+                            if isinstance(fecha_venc, str):
+                                vencimiento = datetime.strptime(fecha_venc, '%Y-%m-%d')
+                            else:
+                                vencimiento = fecha_venc
+                            
                             dias_diferencia = (vencimiento - hoy).days
                             
                             if dias_diferencia < 0:
                                 lotes_vencidos += 1
                             elif dias_diferencia <= 60:
                                 lotes_por_vencer += 1
-                        except:
+                        except Exception as e:
+                            print(f"⚠️ Error procesando fecha vencimiento: {e}")
                             pass
             
+            # ✅ Obtener el valor del inventario (stock * precio de compra)
             valor_inventario = stock_total * producto.get('precioCompra', 0)
             
+            # ✅ Preparar resultado completo
             resultado = {
-                'producto': producto,
+                'producto': {
+                    **producto,
+                    # ✅ AGREGAR DATOS CALCULADOS AL PRODUCTO
+                    'stockTotal': stock_total,
+                    'stockUnitario': stock_total,  # Para compatibilidad
+                    'lotesTotales': len(lotes),
+                    'lotesActivos': lotes_activos,
+                    'lotesVencidos': lotes_vencidos,
+                    'lotesPorVencer': lotes_por_vencer
+                },
                 'lotes': lotes,
                 'stock_total': stock_total,
                 'valor_inventario': valor_inventario,
                 'lotes_count': len([l for l in lotes if (l.get('Stock_Lote', 0) or l.get('Cantidad_Unitario', 0)) > 0]),
                 'lotes_vencidos': lotes_vencidos,
-                'lotes_por_vencer': lotes_por_vencer
+                'lotes_por_vencer': lotes_por_vencer,
+                'estadisticas': {
+                    'stock_total': stock_total,
+                    'valor_inventario': valor_inventario,
+                    'lotes_totales': len(lotes),
+                    'lotes_activos': lotes_activos,
+                    'lotes_vencidos': lotes_vencidos,
+                    'lotes_por_vencer': lotes_por_vencer,
+                    'porcentaje_activos': (lotes_activos / len(lotes) * 100) if lotes else 0
+                }
             }
             
-            print(f"📊 Detalles cargados para {codigo}: {len(lotes)} lotes, {stock_total} stock total")
+            print(f"📊 Detalles completos para {codigo}:")
+            print(f"   - Stock total: {stock_total} unidades")
+            print(f"   - Lotes totales: {len(lotes)}")
+            print(f"   - Lotes activos: {lotes_activos}")
+            print(f"   - Lotes vencidos: {lotes_vencidos}")
+            print(f"   - Valor inventario: Bs {valor_inventario:.2f}")
+            
             return resultado
             
         except Exception as e:
@@ -1115,8 +1153,6 @@ class InventarioModel(QObject):
             traceback.print_exc()
             self.operacionError.emit(f"Error obteniendo detalles: {str(e)}")
             return {}
-    
-    
     # ===============================
     # SLOTS ALERTAS
     # ===============================
@@ -1567,7 +1603,7 @@ class InventarioModel(QObject):
     
     def _normalizar_producto(self, producto_raw: dict) -> dict:
         """
-        ✅ CORREGIDO: Normalización sin campos inexistentes
+        ✅ CORREGIDO COMPLETO: Normalización con TODOS los campos necesarios
         """
         try:
             def safe_float(value):
@@ -1588,10 +1624,13 @@ class InventarioModel(QObject):
             # Stock calculado desde lotes
             stock_total = safe_int(
                 producto_raw.get('Stock_Total') or 
-                producto_raw.get('Stock_Calculado', 0)
+                producto_raw.get('Stock_Calculado') or 
+                producto_raw.get('stockTotal') or 
+                producto_raw.get('stock') or 
+                0
             )
             
-            # ✅ CORREGIDO: Solo campos existentes
+            # ✅ NORMALIZACIÓN COMPLETA
             producto_normalizado = {
                 'id': safe_int(producto_raw.get('id', 0)),
                 'codigo': safe_str(producto_raw.get('Codigo', '')),
@@ -1601,30 +1640,43 @@ class InventarioModel(QObject):
                 'detalles': safe_str(producto_raw.get('Detalles', '')),
                 'Detalles': safe_str(producto_raw.get('Detalles', '')),
                 
-                # ✅ Precio_compra (minúscula)
+                # ✅ Precios
                 'precioCompra': safe_float(producto_raw.get('Precio_compra', 0)),
                 'Precio_compra': safe_float(producto_raw.get('Precio_compra', 0)),
-                
                 'precioVenta': safe_float(producto_raw.get('Precio_venta', 0)),
                 'Precio_venta': safe_float(producto_raw.get('Precio_venta', 0)),
                 
-                # Stock calculado
+                # ✅ Stock calculado
                 'stockUnitario': stock_total,
                 'Stock_Total': stock_total,
+                'stockTotal': stock_total,
+                'stock': stock_total,
                 
-                # ✅ Solo Stock_Minimo (no Stock_Maximo)
+                # ✅ Stock mínimo (¡CRÍTICO!)
                 'Stock_Minimo': safe_int(producto_raw.get('Stock_Minimo', 10)),
+                'stock_minimo': safe_int(producto_raw.get('Stock_Minimo', 10)),
+                'stockMinimo': safe_int(producto_raw.get('Stock_Minimo', 10)),
                 
+                # ✅ Unidad de medida
                 'unidadMedida': safe_str(producto_raw.get('Unidad_Medida', 'Tabletas')),
                 'Unidad_Medida': safe_str(producto_raw.get('Unidad_Medida', 'Tabletas')),
                 
+                # ✅ Marca (ambos formatos)
                 'idMarca': safe_str(producto_raw.get('Marca_Nombre', 'GENÉRICO')),
                 'ID_Marca': safe_int(producto_raw.get('ID_Marca', 1)),
                 'Marca_Nombre': safe_str(producto_raw.get('Marca_Nombre', 'GENÉRICO')),
+                'marca_nombre': safe_str(producto_raw.get('Marca_Nombre', 'GENÉRICO')),
+                'marca': safe_str(producto_raw.get('Marca_Nombre', 'GENÉRICO')),
                 
+                # ✅ Estado
                 'Activo': bool(producto_raw.get('Activo', True)),
                 'activo': bool(producto_raw.get('Activo', True)),
                 
+                # ✅ Lotes
+                'lotesTotales': safe_int(producto_raw.get('Lotes_Totales', 0)),
+                'lotesActivos': safe_int(producto_raw.get('Lotes_Activos', 0)),
+                
+                # ✅ Otros campos
                 'Marca_Detalles': safe_str(producto_raw.get('Marca_Detalles', '')),
                 'Marca_ID': safe_int(producto_raw.get('Marca_ID', 1))
             }
@@ -1633,12 +1685,16 @@ class InventarioModel(QObject):
             
         except Exception as e:
             print(f"❌ Error normalizando producto: {e}")
+            import traceback
+            traceback.print_exc()
             return {
                 'id': 0,
                 'codigo': 'ERROR',
                 'nombre': 'Error cargando producto',
                 'stockUnitario': 0,
-                'Stock_Minimo': 10
+                'Stock_Minimo': 10,
+                'ID_Marca': 1,
+                'lotesTotales': 0
             }
     
     def obtener_stock_total_producto(self, codigo: str) -> int:
@@ -1752,30 +1808,50 @@ class InventarioModel(QObject):
 
     @Slot(int, result='QVariant')
     def get_producto_para_edicion(self, producto_id: int):
-        """Obtiene todos los datos necesarios para editar un producto"""
+        """Slot para QML: Obtiene todos los datos necesarios para editar un producto"""
         try:
             if producto_id <= 0:
+                print("⚠️ ID de producto inválido para edición")
                 return {}
             
-            producto = self.producto_repo.get_producto_para_edicion(producto_id)
+            print(f"🔍 QML solicitando producto para edición - ID: {producto_id}")
             
-            if producto:
-                # Normalizar para QML
-                producto_normalizado = self._normalizar_producto(producto)
-                
-                # Asegurar que tenemos todos los campos
-                producto_normalizado.update({
-                    'stock_minimo': producto.get('Stock_Minimo', 10),
-                    'lotesTotales': producto.get('Lotes_Totales', 0),
-                    'stockTotal': producto.get('Stock_Total', 0)
-                })
-                
-                return producto_normalizado
-            else:
+            # ✅ Usar el nuevo método especializado
+            producto_raw = self.producto_repo.get_producto_para_edicion(producto_id)
+            
+            if not producto_raw:
+                print(f"❌ No se encontró producto para edición: {producto_id}")
                 return {}
-                
+            
+            # ✅ Normalizar producto para QML
+            producto_normalizado = self._normalizar_producto(producto_raw)
+            
+            # ✅ Asegurar que tenemos todos los campos críticos
+            producto_normalizado.update({
+                'stock_minimo': producto_raw.get('Stock_Minimo', 10),
+                'stockMinimo': producto_raw.get('Stock_Minimo', 10),  # Para compatibilidad
+                'ID_Marca': producto_raw.get('ID_Marca', 1),
+                'lotesTotales': producto_raw.get('Lotes_Totales', 0),
+                'lotesActivos': producto_raw.get('Lotes_Activos', 0),
+                'stockTotal': producto_raw.get('Stock_Total', 0),
+                'marca_nombre': producto_raw.get('Marca_Nombre', ''),
+                'Marca_Nombre': producto_raw.get('Marca_Nombre', ''),
+                'precio_compra': producto_raw.get('Precio_compra', 0),
+                'precio_venta': producto_raw.get('Precio_venta', 0)
+            })
+            
+            print(f"✅ Producto normalizado para QML:")
+            print(f"   - Código: {producto_normalizado.get('codigo')}")
+            print(f"   - Stock mínimo: {producto_normalizado.get('stock_minimo')}")
+            print(f"   - ID Marca: {producto_normalizado.get('ID_Marca')}")
+            print(f"   - Lotes totales: {producto_normalizado.get('lotesTotales')}")
+            
+            return producto_normalizado
+            
         except Exception as e:
-            print(f"❌ Error en get_producto_para_edicion: {e}")
+            print(f"❌ Error en get_producto_para_edicion (slot): {e}")
+            import traceback
+            traceback.print_exc()
             return {}
 
 # Registrar el tipo para QML

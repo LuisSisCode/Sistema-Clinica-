@@ -71,23 +71,6 @@ Rectangle {
         compraId = 0
     }
     
-    function formatearFecha(fechaStr) {
-        if (!fechaStr) return "N/A"
-        var fecha = new Date(fechaStr)
-        var dia = ("0" + fecha.getDate()).slice(-2)
-        var mes = ("0" + (fecha.getMonth() + 1)).slice(-2)
-        var anio = fecha.getFullYear()
-        return dia + "/" + mes + "/" + anio
-    }
-    
-    function formatearHora(fechaStr) {
-        if (!fechaStr) return "N/A"
-        var fecha = new Date(fechaStr)
-        var hora = ("0" + fecha.getHours()).slice(-2)
-        var min = ("0" + fecha.getMinutes()).slice(-2)
-        return hora + ":" + min
-    }
-    
     function abrirEditarLote(productoData) {
         console.log("✏️ Editar lote:", productoData.Producto_Nombre)
         // Aquí se integrará con EditarLoteDialog.qml
@@ -736,6 +719,71 @@ Rectangle {
                     }
                 }
             }
+        }
+    }
+
+    function formatearFecha(fechaStr) {
+        if (!fechaStr) return "N/A"
+        
+        try {
+            // Si ya es una fecha formateada dd/mm/yyyy, retornarla
+            if (typeof fechaStr === 'string' && fechaStr.includes('/')) {
+                return fechaStr
+            }
+            
+            // Si es un string ISO (2024-01-15 o 2024-01-15T10:30:00)
+            if (typeof fechaStr === 'string') {
+                // Extraer solo la parte de la fecha (sin hora)
+                var fechaPart = fechaStr.split('T')[0].split(' ')[0]
+                var partes = fechaPart.split('-')
+                
+                if (partes.length === 3) {
+                    var dia = partes[2]
+                    var mes = partes[1]
+                    var anio = partes[0]
+                    return dia + "/" + mes + "/" + anio
+                }
+            }
+            
+            // Intentar como objeto Date
+            var fecha = new Date(fechaStr)
+            if (isNaN(fecha.getTime())) return "N/A"
+            
+            var dia = ("0" + fecha.getDate()).slice(-2)
+            var mes = ("0" + (fecha.getMonth() + 1)).slice(-2)
+            var anio = fecha.getFullYear()
+            return dia + "/" + mes + "/" + anio
+        } catch (e) {
+            console.log("❌ Error formateando fecha:", fechaStr, e)
+            return "N/A"
+        }
+    }
+
+    function formatearHora(fechaStr) {
+        if (!fechaStr) return "N/A"
+        
+        try {
+            // Si es un string ISO con hora
+            if (typeof fechaStr === 'string' && fechaStr.includes('T')) {
+                var horaPart = fechaStr.split('T')[1]
+                if (horaPart) {
+                    var partesHora = horaPart.split(':')
+                    if (partesHora.length >= 2) {
+                        return partesHora[0] + ":" + partesHora[1]
+                    }
+                }
+            }
+            
+            // Intentar como objeto Date
+            var fecha = new Date(fechaStr)
+            if (isNaN(fecha.getTime())) return "N/A"
+            
+            var hora = ("0" + fecha.getHours()).slice(-2)
+            var min = ("0" + fecha.getMinutes()).slice(-2)
+            return hora + ":" + min
+        } catch (e) {
+            console.log("❌ Error formateando hora:", fechaStr, e)
+            return "N/A"
         }
     }
     

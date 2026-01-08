@@ -75,7 +75,6 @@ Rectangle {
     property string inputMeasureUnit: "Tabletas"
     property string inputMarca: ""
     property int inputStockMinimo: 10
-    // ✅ NUEVO: Propiedades para precios (mantenerlos en edición)
     property real inputPrecioCompra: 0.0
     property real inputPrecioVenta: 0.0
 
@@ -85,6 +84,10 @@ Rectangle {
     property int marcaIdSeleccionada: 0
     property string marcaSeleccionadaNombre: ""
     property bool marcasListenerConnected: false
+    // ===============================
+    // PROPIEDADES DE GUARDADO
+    // ===============================
+    property bool guardando: false
 
     // ===============================
     // TIMERS
@@ -99,6 +102,15 @@ Rectangle {
         id: errorTimer
         interval: 4000
         onTriggered: showErrorMessage = false
+    }
+
+    // Timer para configuración retardada de marca
+    Timer {
+        id: marcaConfigTimer
+        interval: 300
+        onTriggered: {
+            configurarMarca()
+        }
     }
 
     // ===============================
@@ -162,10 +174,18 @@ Rectangle {
     // FUNCIÓN GUARDAR PRODUCTO
     // ===============================
     function guardarProducto() {
+
+        if (guardando) {
+            console.log("⏭️ Ya se está guardando, omitiendo...")
+            return false
+        }
+        
+        guardando = true
         console.log("💾 Iniciando guardado de producto FIFO 2.0")
         console.log("   - marcaIdSeleccionada:", marcaIdSeleccionada)
         console.log("   - marcaSeleccionadaNombre:", marcaSeleccionadaNombre)
         console.log("   - stockMinimo:", inputStockMinimo)
+        console.log("   - unidad_medida:", inputMeasureUnit)
 
         // ✅ VALIDACIÓN CRÍTICA DE MARCA
         if (marcaIdSeleccionada === 0 || !marcaSeleccionadaNombre) {
@@ -214,7 +234,6 @@ Rectangle {
             marca_id: marcaIdSeleccionada,
             marca: marcaSeleccionadaNombre,
             stock_minimo: inputStockMinimo,
-            // ✅ FIX: Mantener precios existentes en modo edición
             precio_compra: inputPrecioCompra,
             precio_venta: inputPrecioVenta
         }
@@ -237,13 +256,13 @@ Rectangle {
                 if (exito) {
                     console.log("✅ Producto actualizado exitosamente")
                     showMessage("Producto actualizado correctamente")
-                    productoActualizado(producto)
                     
-                    Qt.callLater(function() {
-                        volverALista()
-                    })
+                    // ✅ CORREGIDO: Solo emitir volverALista, NO productoActualizado
+                    // Esto evita el ciclo infinito
+                    volverALista()
                 } else {
                     showError("Error al actualizar el producto")
+                    guardando = false
                     return false
                 }
             } else {
@@ -253,22 +272,21 @@ Rectangle {
                 if (exito) {
                     console.log("✅ Producto creado exitosamente")
                     showMessage("Producto creado correctamente")
-                    productoCreado(producto)
                     
-                    Qt.callLater(function() {
-                        volverALista()
-                    })
+                    // ✅ CORREGIDO: Solo emitir volverALista
+                    volverALista()
                 } else {
                     showError("Error al crear el producto")
                     return false
                 }
             }
-            
+            guardando = false
             return exito
             
         } catch (error) {
             console.log("❌ Error guardando producto:", error.toString())
             showError("Error: " + error.toString())
+            guardando = false
             return false
         }
     }
@@ -346,6 +364,39 @@ Rectangle {
     }
 
     // ===============================
+    // FUNCIÓN PARA CONFIGURAR MARCA
+    // ===============================
+    function configurarMarca() {
+        console.log("🔧 Configurando marca en CrearProducto.qml...")
+        console.log("   - MarcaComboBox disponible:", !!marcaComboBox)
+        console.log("   - ID Marca:", marcaIdSeleccionada)
+        console.log("   - Nombre Marca:", marcaSeleccionadaNombre)
+        
+        if (!marcaComboBox) {
+            console.log("⏳ MarcaComboBox no disponible aún")
+            return
+        }
+        
+        // OPCIÓN A: setMarcaById
+        if (typeof marcaComboBox.setMarcaById === 'function' && marcaIdSeleccionada > 0) {
+            console.log("🎯 Usando setMarcaById con ID:", marcaIdSeleccionada)
+            marcaComboBox.setMarcaById(marcaIdSeleccionada)
+        } 
+        // OPCIÓN B: Establecer texto directamente
+        else if (marcaComboBox.searchField) {
+            console.log("🎯 Estableciendo texto de marca directamente")
+            marcaComboBox.searchField.text = marcaSeleccionadaNombre
+        }
+        // OPCIÓN C: forzarSeleccion
+        else if (typeof marcaComboBox.forzarSeleccion === 'function') {
+            console.log("🎯 Usando forzarSeleccion")
+            marcaComboBox.forzarSeleccion(marcaIdSeleccionada, marcaSeleccionadaNombre)
+        }
+        
+        console.log("✅ Marca configurada exitosamente")
+    }
+
+    // ===============================
     // INICIALIZACIÓN
     // ===============================
     function inicializarParaCrear() {
@@ -359,111 +410,89 @@ Rectangle {
     }
 
     function inicializarParaEditar(producto) {
-        console.log("📝 Inicializando para editar:", producto.codigo)
-        console.log("   Datos recibidos:", JSON.stringify(producto))
+        console.log("📝 INICIO: Inicializando para editar:", producto.codigo)
+        console.log("🔍 Datos recibidos en inicializarParaEditar:", JSON.stringify(producto))
         
-        // ✅ CARGAR DATOS EN PROPERTIES
+        // ✅ PASO 1: Cargar propiedades locales (SINCRÓNICO)
         inputProductCode = producto.codigo || ""
         inputProductName = producto.nombre || ""
         inputProductDetails = producto.detalles || ""
         inputStockMinimo = producto.stock_minimo || 10
         inputPrecioCompra = producto.precio_compra || 0
         inputPrecioVenta = producto.precio_venta || 0
+        marcaIdSeleccionada = producto.marca_id || 0
+        marcaSeleccionadaNombre = producto.marca || ""
         
-        console.log("📋 Datos cargados en propiedades:")
-        console.log("   - Código:", inputProductCode)
-        console.log("   - Nombre:", inputProductName)
-        console.log("   - Stock mínimo:", inputStockMinimo)
-        console.log("   - Precio compra:", inputPrecioCompra)
-        console.log("   - Precio venta:", inputPrecioVenta)
+        // ✅ DEBUG: Verificar unidad de medida
+        console.log("🎯 Unidad de medida en datos recibidos:", producto.unidad_medida)
         
-        // ✅ CARGAR UNIDAD DE MEDIDA
+        // ✅ PASO 2: Actualizar campos de texto INMEDIATAMENTE
+        if (codigoField) {
+            codigoField.text = inputProductCode
+            console.log("✅ Código:", inputProductCode)
+        }
+        if (nombreField) {
+            nombreField.text = inputProductName
+            console.log("✅ Nombre:", inputProductName)
+        }
+        if (detallesField) {
+            detallesField.text = inputProductDetails
+            console.log("✅ Detalles:", inputProductDetails)
+        }
+        if (stockMinimoField) {
+            stockMinimoField.text = inputStockMinimo.toString()
+            console.log("✅ Stock mínimo:", inputStockMinimo)
+        }
+        
+        // ✅ PASO 3: Unidad de medida - CORREGIDO (manejar "Cápsula" vs "Cápsulas")
         var unidades = ["Tabletas", "Cápsulas", "ml", "mg", "g", "Unidades", "Sobres", "Frascos"]
         var unidadProducto = producto.unidad_medida || "Tabletas"
+        
+        // ⚠️ CORRECCIÓN CRÍTICA: Manejar "Cápsula" (singular) vs "Cápsulas" (plural)
+        if (unidadProducto === "Cápsula") {
+            unidadProducto = "Cápsulas"
+            console.log("🔄 Normalizando 'Cápsula' a 'Cápsulas'")
+        }
+        
         var indexUnidad = unidades.indexOf(unidadProducto)
-        if (indexUnidad >= 0) {
+        
+        console.log("🔍 Buscando unidad:", unidadProducto, "en array:", unidades)
+        console.log("🔍 Índice encontrado:", indexUnidad)
+        
+        if (indexUnidad >= 0 && unidadCombo) {
             unidadCombo.currentIndex = indexUnidad
             inputMeasureUnit = unidadProducto
-            console.log("✅ Unidad de medida:", unidadProducto, "índice:", indexUnidad)
+            console.log("✅ Unidad establecida:", unidadProducto)
         } else {
-            unidadCombo.currentIndex = 0
+            // Fallback a la primera opción
+            if (unidadCombo) {
+                unidadCombo.currentIndex = 0
+            }
             inputMeasureUnit = "Tabletas"
             console.log("⚠️ Unidad no encontrada, usando Tabletas por defecto")
         }
         
-        // ✅ SELECCIONAR MARCA
-        var marcaId = producto.marca_id || 0
-        var marcaNombre = producto.marca || ""
+        // ✅ PASO 4: Marca - USAR TIMER EN LUGAR DE setTimeout
+        console.log("⏳ Programando configuración de marca con Timer...")
+        marcaConfigTimer.restart()
         
-        console.log("🏷️ Buscando marca - ID:", marcaId, "Nombre:", marcaNombre)
-        
-        if (marcaId > 0 && marcaComboBox) {
-            // Buscar por ID
-            for (var i = 0; i < marcasModel.length; i++) {
-                if (marcasModel[i].id === marcaId) {
-                    marcaComboBox.seleccionarMarcaPorId(marcaId)
-                    marcaIdSeleccionada = marcaId
-                    marcaSeleccionadaNombre = marcasModel[i].nombre
-                    console.log("✅ Marca encontrada por ID:", marcasModel[i].nombre)
-                    break
-                }
-            }
-        } else if (marcaNombre && marcaComboBox) {
-            // Buscar por nombre
-            for (var j = 0; j < marcasModel.length; j++) {
-                if (marcasModel[j].nombre === marcaNombre) {
-                    marcaComboBox.seleccionarMarcaPorId(marcasModel[j].id)
-                    marcaIdSeleccionada = marcasModel[j].id
-                    marcaSeleccionadaNombre = marcaNombre
-                    console.log("✅ Marca encontrada por nombre:", marcaNombre)
-                    break
-                }
-            }
-        }
-        
-        if (marcaIdSeleccionada === 0 && marcasModel.length > 0) {
-            // Usar primera marca por defecto
-            marcaComboBox.seleccionarMarcaPorId(marcasModel[0].id)
-            marcaIdSeleccionada = marcasModel[0].id
-            marcaSeleccionadaNombre = marcasModel[0].nombre
-            console.log("⚠️ Usando primera marca por defecto:", marcaSeleccionadaNombre)
-        }
-        
-        // ✅ FORZAR ACTUALIZACIÓN DE CAMPOS VISUALES
-        Qt.callLater(function() {
-            if (codigoField) {
-                codigoField.text = inputProductCode
-                console.log("✅ Campo código actualizado:", inputProductCode)
-            }
-            if (nombreField) {
-                nombreField.text = inputProductName
-                console.log("✅ Campo nombre actualizado:", inputProductName)
-            }
-            if (detallesField) {
-                detallesField.text = inputProductDetails
-                console.log("✅ Campo detalles actualizado:", inputProductDetails)
-            }
-            if (stockMinimoField) {
-                stockMinimoField.text = inputStockMinimo.toString()
-                console.log("✅ Campo stock mínimo actualizado:", inputStockMinimo)
-            }
-            console.log("✅ Campos visuales actualizados completamente")
-        })
+        console.log("✅ INICIALIZACIÓN COMPLETADA para:", producto.codigo)
     }
+
     // ===============================
     // MODAL CENTRADO
     // ===============================
     Rectangle {
-            id: modalContent
-            width: Math.min(550, parent.width * 0.95)
-            height: Math.min(500, parent.height * 0.88)
-            x: (parent.width - width) / 2
-            y: (parent.height - height) / 2
-            color: white
-            radius: 12
-            border.color: borderColor
-            border.width: 1
-            z: 10001
+        id: modalContent
+        width: Math.min(550, parent.width * 0.95)
+        height: Math.min(500, parent.height * 0.88)
+        x: (parent.width - width) / 2
+        y: (parent.height - height) / 2
+        color: white
+        radius: 12
+        border.color: borderColor
+        border.width: 1
+        z: 10001
         
         // Detiene propagación de clicks al overlay
         MouseArea {
@@ -908,10 +937,11 @@ Rectangle {
                                     id: unidadCombo
                                     Layout.fillWidth: true
                                     Layout.preferredHeight: inputHeight
-                                    model: ["Tabletas", "Cápsulas", "ml", "mg", "g", "Unidades", "Sobres", "Frascos"]
+                                    model: ["Tableta", "Cápsulas", "ml", "mg", "g", "Unidad", "Sobres", "Frascos", "Tubo", "Inhalador", "Ampolla"]
                                     
                                     onCurrentTextChanged: {
                                         inputMeasureUnit = currentText
+                                        console.log("📏 Unidad de medida cambiada a:", currentText)
                                     }
                                     
                                     background: Rectangle {
@@ -1086,5 +1116,13 @@ Rectangle {
         console.log("🚀 CrearProducto.qml (Modal centrado) cargado")
         console.log("   - InventarioModel:", !!inventarioModel)
         console.log("   - FarmaciaData:", !!farmaciaData)
+        
+        // Si estamos en modo edición, inicializar con los datos del producto
+        if (modoEdicion && productoData) {
+            console.log("📝 Modo edición detectado, inicializando con datos del producto")
+            Qt.callLater(function() {
+                inicializarParaEditar(productoData)
+            })
+        }
     }
 }

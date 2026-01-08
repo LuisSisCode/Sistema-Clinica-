@@ -28,15 +28,13 @@ class VentaRepository(BaseRepository):
         WHERE CAST(v.Fecha AS DATE) = CAST(GETDATE() AS DATE)
         ORDER BY v.Fecha DESC
         """
-        # ✅ CORREGIDO: Usar use_cache=False para obtener datos frescos
         resultado = self._execute_query(query, use_cache=False)
-        
         return resultado
     
-    # ✅ NUEVO: Método para buscar productos directamente de tabla Productos
     def buscar_productos_para_venta(self, termino: str) -> List[Dict[str, Any]]:
         """
         ✅ CORREGIDO: Busca productos SIEMPRE sin cache
+        Calcula stock desde tabla Lote
         """
         if not termino:
             return []
@@ -48,13 +46,21 @@ class VentaRepository(BaseRepository):
             p.Nombre,
             p.Precio_venta,
             m.Nombre as Marca_Nombre,
-            -- STOCK TOTAL CALCULADO EN TIEMPO REAL
-            ISNULL((SELECT SUM(l.Cantidad_Unitario) 
-                    FROM Lote l 
-                    WHERE l.Id_Producto = p.id), 0) as Stock_Total,
+            -- ✅ STOCK TOTAL CALCULADO DESDE LOTES
+            ISNULL((
+                SELECT SUM(l.Cantidad_Unitario) 
+                FROM Lote l 
+                WHERE l.Id_Producto = p.id 
+                  AND l.Estado = 'ACTIVO'
+            ), 0) as Stock_Total,
             -- Estado en tiempo real
             CASE 
-                WHEN (SELECT SUM(l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id) > 0 
+                WHEN ISNULL((
+                    SELECT SUM(l.Cantidad_Unitario) 
+                    FROM Lote l 
+                    WHERE l.Id_Producto = p.id 
+                      AND l.Estado = 'ACTIVO'
+                ), 0) > 0 
                 THEN 'DISPONIBLE'
                 ELSE 'AGOTADO'
             END as Estado,
@@ -62,12 +68,12 @@ class VentaRepository(BaseRepository):
             GETDATE() as Consulta_Timestamp
         FROM Productos p
         INNER JOIN Marca m ON p.ID_Marca = m.id
-        WHERE (p.Nombre LIKE ? OR p.Codigo LIKE ?)
+        WHERE p.Activo = 1
+          AND (p.Nombre LIKE ? OR p.Codigo LIKE ?)
         ORDER BY p.Nombre
         """
         
         termino_like = f"%{termino}%"
-        # ✅ FORZAR use_cache=False SIEMPRE
         resultado = self._execute_query(query, (termino_like, termino_like), use_cache=False) or []
         
         print(f"🔍 Búsqueda de productos SIN CACHE: {len(resultado)} resultados para '{termino}'")
@@ -75,7 +81,7 @@ class VentaRepository(BaseRepository):
     
     def buscar_productos_para_venta_sin_cache(self, termino: str) -> List[Dict[str, Any]]:
         """
-        ✅ NUEVO: Búsqueda garantizada SIN cache para después de ventas
+        ✅ CORREGIDO: Búsqueda garantizada SIN cache
         """
         if not termino:
             return []
@@ -88,24 +94,31 @@ class VentaRepository(BaseRepository):
             p.Codigo,
             p.Nombre,
             p.Precio_venta,
-            p.Stock_Unitario,
             m.Nombre as Marca_Nombre,
-            -- RECALCULAR STOCK DESDE LOTES EN TIEMPO REAL
-            ISNULL((SELECT SUM(l.Cantidad_Unitario) 
-                    FROM Lote l 
-                    WHERE l.Id_Producto = p.id), 0) as Stock_Total,
+            -- ✅ RECALCULAR STOCK DESDE LOTES
+            ISNULL((
+                SELECT SUM(l.Cantidad_Unitario) 
+                FROM Lote l 
+                WHERE l.Id_Producto = p.id 
+                  AND l.Estado = 'ACTIVO'
+            ), 0) as Stock_Total,
             -- Información adicional para debug
-            (SELECT COUNT(*) FROM Lote l WHERE l.Id_Producto = p.id AND l.Cantidad_Unitario > 0) as Lotes_Activos,
+            (SELECT COUNT(*) 
+             FROM Lote l 
+             WHERE l.Id_Producto = p.id 
+               AND l.Cantidad_Unitario > 0 
+               AND l.Estado = 'ACTIVO') as Lotes_Activos,
             GETDATE() as Timestamp_Consulta
         FROM Productos p
         INNER JOIN Marca m ON p.ID_Marca = m.id
-        WHERE (p.Nombre LIKE ? OR p.Codigo LIKE ?)
+        WHERE p.Activo = 1
+          AND (p.Nombre LIKE ? OR p.Codigo LIKE ?)
         ORDER BY p.Nombre
         """
         
         termino_like = f"%{termino}%"
         
-        # ✅ FORZAR conexión directa sin ningún tipo de cache
+        # ✅ CONEXIÓN DIRECTA sin ningún tipo de cache
         conn = None
         try:
             conn = self._get_connection()
@@ -134,10 +147,159 @@ class VentaRepository(BaseRepository):
             if conn:
                 conn.close()
 
-    # ✅ NUEVO: Método para obtener producto por código desde tabla Productos
+    def get_producto_por_codigo(self, codigo: str) -> Optional[Dict[str, Any]]:
+        """
+        ✅ CORREGIDO: SIEMPRE sin cache para datos frescos
+        Calcula stock desde lotes
+        """
+        validate_required(codigo, "codigo")
+        
+        query = """
+        SELECT 
+            p.id,
+            p.Codigo,
+            p.Nombre,
+            p.Detalles,
+            p.Precio_compra,
+            p.Precio_venta,
+            p.Unidad_Medida,
+            p.Stock_Minimo,
+            p.ID_Marca,
+            m.Nombre as Marca_Nombre,
+            m.Detalles as Marca_Detalles,
+            -- ✅ STOCK REAL CALCULADO DESDE LOTES
+            ISNULL((
+                SELECT SUM(l.Cantidad_Unitario) 
+                FROM Lote l 
+                WHERE l.Id_Producto = p.id 
+                  AND l.Estado = 'ACTIVO'
+            ), 0) as Stock_Total,
+            -- Alias para compatibilidad
+            ISNULL((
+                SELECT SUM(l.Cantidad_Unitario) 
+                FROM Lote l 
+                WHERE l.Id_Producto = p.id 
+                  AND l.Estado = 'ACTIVO'
+            ), 0) as Stock_Unitario,
+            -- Información FIFO
+            (SELECT TOP 1 l.id 
+             FROM Lote l 
+             WHERE l.Id_Producto = p.id 
+               AND l.Cantidad_Unitario > 0 
+               AND l.Estado = 'ACTIVO'
+             ORDER BY 
+               CASE WHEN l.Fecha_Vencimiento IS NOT NULL 
+                    THEN l.Fecha_Vencimiento 
+                    ELSE '9999-12-31' 
+               END ASC,
+               l.Fecha_Compra ASC,
+               l.id ASC
+            ) as Lote_FIFO_ID,
+            (SELECT TOP 1 l.Cantidad_Unitario 
+             FROM Lote l 
+             WHERE l.Id_Producto = p.id 
+               AND l.Cantidad_Unitario > 0 
+               AND l.Estado = 'ACTIVO'
+             ORDER BY 
+               CASE WHEN l.Fecha_Vencimiento IS NOT NULL 
+                    THEN l.Fecha_Vencimiento 
+                    ELSE '9999-12-31' 
+               END ASC,
+               l.Fecha_Compra ASC,
+               l.id ASC
+            ) as Lote_FIFO_Stock,
+            (SELECT COUNT(*) 
+             FROM Lote l 
+             WHERE l.Id_Producto = p.id 
+               AND l.Cantidad_Unitario > 0 
+               AND l.Estado = 'ACTIVO') as Lotes_Activos,
+            GETDATE() as Timestamp_Consulta
+        FROM Productos p
+        INNER JOIN Marca m ON p.ID_Marca = m.id
+        WHERE p.Codigo = ? AND p.Activo = 1
+        """
+        
+        resultado = self._execute_query(query, (codigo,), fetch_one=True, use_cache=False)
+        
+        if resultado:
+            print(f"📦 Producto {codigo}: Stock desde lotes = {resultado['Stock_Total']}")
+        else:
+            print(f"❌ Producto {codigo} no encontrado")
+        
+        return resultado
+
+    def get_producto_por_codigo_sin_cache(self, codigo: str) -> Optional[Dict[str, Any]]:
+        """
+        ✅ CORREGIDO: Garantiza consulta directa sin ningún cache
+        """
+        validate_required(codigo, "codigo")
+        
+        print(f"🚫 CONSULTA FORZADA SIN CACHE para producto: '{codigo}'")
+        
+        query = """
+        SELECT 
+            p.id,
+            p.Codigo,
+            p.Nombre,
+            p.Precio_venta,
+            m.Nombre as Marca_Nombre,
+            -- ✅ RECALCULAR STOCK DESDE LOTES
+            ISNULL((
+                SELECT SUM(l.Cantidad_Unitario) 
+                FROM Lote l 
+                WHERE l.Id_Producto = p.id 
+                  AND l.Estado = 'ACTIVO'
+            ), 0) as Stock_Total,
+            -- Alias para compatibilidad
+            ISNULL((
+                SELECT SUM(l.Cantidad_Unitario) 
+                FROM Lote l 
+                WHERE l.Id_Producto = p.id 
+                  AND l.Estado = 'ACTIVO'
+            ), 0) as Stock_Unitario,
+            -- Información de lotes para debug
+            (SELECT COUNT(*) 
+             FROM Lote l 
+             WHERE l.Id_Producto = p.id 
+               AND l.Cantidad_Unitario > 0 
+               AND l.Estado = 'ACTIVO') as Lotes_Activos,
+            (SELECT COUNT(*) 
+             FROM Lote l 
+             WHERE l.Id_Producto = p.id) as Total_Lotes,
+            GETDATE() as Timestamp_Consulta
+        FROM Productos p
+        INNER JOIN Marca m ON p.ID_Marca = m.id
+        WHERE p.Codigo = ? AND p.Activo = 1
+        """
+        
+        # ✅ CONEXIÓN DIRECTA
+        conn = None
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            cursor.execute(query, (codigo,))
+            
+            row = cursor.fetchone()
+            if row:
+                columns = [desc[0] for desc in cursor.description]
+                resultado = dict(zip(columns, row))
+                
+                print(f"✅ Producto {codigo}: Stock_Total={resultado['Stock_Total']}, Lotes_Activos={resultado['Lotes_Activos']}")
+                return resultado
+            else:
+                print(f"❌ Producto {codigo} no encontrado")
+                return None
+                
+        except Exception as e:
+            print(f"❌ Error en consulta directa: {e}")
+            return None
+        finally:
+            if conn:
+                conn.close()
+
     def get_producto_por_codigo_completo(self, codigo: str) -> Dict[str, Any]:
         """
-        MEJORADO: Obtiene producto con información completa para edición
+        ✅ CORREGIDO: Obtiene producto con información completa
         """
         if not codigo:
             return None
@@ -150,230 +312,231 @@ class VentaRepository(BaseRepository):
             p.Detalles,
             p.Precio_compra,
             p.Precio_venta,
-            p.Stock_Unitario,
             p.Unidad_Medida,
+            p.Stock_Minimo,
             p.ID_Marca,
             m.Nombre as Marca_Nombre,
-            ISNULL(p.Stock_Unitario, 0) as Stock_Actual
+            -- ✅ STOCK CALCULADO DESDE LOTES
+            ISNULL((
+                SELECT SUM(l.Cantidad_Unitario) 
+                FROM Lote l 
+                WHERE l.Id_Producto = p.id 
+                  AND l.Estado = 'ACTIVO'
+            ), 0) as Stock_Actual,
+            ISNULL((
+                SELECT SUM(l.Cantidad_Unitario) 
+                FROM Lote l 
+                WHERE l.Id_Producto = p.id 
+                  AND l.Estado = 'ACTIVO'
+            ), 0) as Stock_Unitario
         FROM Productos p
         LEFT JOIN Marca m ON p.ID_Marca = m.id
-        WHERE p.Codigo = ?
+        WHERE p.Codigo = ? AND p.Activo = 1
         """
         
         resultado = self._execute_query(query, (codigo.strip(),), fetch_one=True, use_cache=False)
         
         if resultado:
-            print(f"🔍 Producto encontrado para edición: {resultado['Codigo']} - Stock: {resultado['Stock_Actual']}")
+            print(f"📋 Producto encontrado: {resultado['Codigo']} - Stock: {resultado['Stock_Actual']}")
         
         return resultado
+
+    def verificar_disponibilidad_producto_sin_cache(self, codigo: str) -> Dict[str, Any]:
+        """
+        ✅ CORREGIDO: Verifica disponibilidad SIN usar cache
+        """
+        if not codigo:
+            return {"cantidad_disponible": 0, "disponible": False}
+        
+        try:
+            query = """
+            SELECT 
+                p.id,
+                p.Codigo,
+                p.Nombre,
+                -- ✅ STOCK CALCULADO DESDE LOTES
+                ISNULL((
+                    SELECT SUM(l.Cantidad_Unitario) 
+                    FROM Lote l 
+                    WHERE l.Id_Producto = p.id 
+                      AND l.Estado = 'ACTIVO'
+                ), 0) as Stock_Disponible
+            FROM Productos p
+            WHERE p.Codigo = ? AND p.Activo = 1
+            """
+            
+            resultado = self._execute_query(query, (codigo.strip(),), fetch_one=True, use_cache=False)
+            
+            if resultado:
+                stock_disponible = resultado['Stock_Disponible'] or 0
+                return {
+                    "cantidad_disponible": stock_disponible,
+                    "disponible": stock_disponible > 0,
+                    "producto_id": resultado['id'],
+                    "nombre": resultado['Nombre']
+                }
+            else:
+                return {"cantidad_disponible": 0, "disponible": False}
+                
+        except Exception as e:
+            print(f"❌ Error verificando disponibilidad sin cache para {codigo}: {e}")
+            return {"cantidad_disponible": 0, "disponible": False}
+
+    # ===== RESTO DE MÉTODOS SIN CAMBIOS =====
+    # (crear_venta, actualizar_venta_completa, eliminar_venta, etc.)
+    # Ya están correctos porque usan el sistema FIFO del ProductoRepository
     
-    def get_producto_por_codigo(self, codigo: str) -> Optional[Dict[str, Any]]:
+    @ExceptionHandler.handle_exception
+    def crear_venta(self, usuario_id: int, items: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         """
-        ✅ CORREGIDO: SIEMPRE sin cache para datos frescos
+        ✅ Crea venta usando sistema FIFO de lotes
         """
-        validate_required(codigo, "codigo")
+        validate_required(usuario_id, "usuario_id")
+        validate_required(items, "items")
         
-        query = """
-        SELECT 
-            p.id,
-            p.Codigo,
-            p.Nombre,
-            p.Detalles,
-            p.Precio_compra,
-            p.Precio_venta,
-            p.Unidad_Medida,
-            p.Stock_Unitario,
-            p.ID_Marca,
-            m.Nombre as Marca_Nombre,
-            m.Detalles as Marca_Detalles,
-            -- ✅ STOCK REAL CALCULADO EN TIEMPO REAL DESDE LOTES
-            ISNULL((SELECT SUM(l.Cantidad_Unitario) 
-                    FROM Lote l 
-                    WHERE l.Id_Producto = p.id), 0) as Stock_Total,
-            -- Para compatibilidad, pero usar Stock_Total como real
-            ISNULL((SELECT SUM(l.Cantidad_Unitario) 
-                    FROM Lote l 
-                    WHERE l.Id_Producto = p.id), 0) as Stock_Unitario_Calculado,
-            -- Información FIFO
-            (SELECT TOP 1 l.id 
-            FROM Lote l 
-            WHERE l.Id_Producto = p.id 
-            AND l.Cantidad_Unitario > 0 
-            ORDER BY l.Fecha_Vencimiento ASC, l.id ASC) as Lote_FIFO_ID,
-            (SELECT TOP 1 l.Cantidad_Unitario 
-            FROM Lote l 
-            WHERE l.Id_Producto = p.id 
-            AND l.Cantidad_Unitario > 0 
-            ORDER BY l.Fecha_Vencimiento ASC, l.id ASC) as Lote_FIFO_Stock,
-            (SELECT COUNT(*) FROM Lote l WHERE l.Id_Producto = p.id AND l.Cantidad_Unitario > 0) as Lotes_Activos,
-            GETDATE() as Timestamp_Consulta
-        FROM Productos p
-        INNER JOIN Marca m ON p.ID_Marca = m.id
-        WHERE p.Codigo = ?
-        """
+        if not items:
+            raise VentaError("No hay items para vender")
         
-        # ✅ SIEMPRE sin cache
-        resultado = self._execute_query(query, (codigo,), fetch_one=True, use_cache=False)
-        
-        if resultado:
-            # Usar el stock calculado como el real
-            resultado['Stock_Unitario'] = resultado['Stock_Total']
-            print(f"📦 Producto {codigo}: Stock FRESCO desde lotes = {resultado['Stock_Total']}")
-        else:
-            print(f"❌ Producto {codigo} no encontrado")
-        
-        return resultado
-    def get_producto_por_codigo_sin_cache(self, codigo: str) -> Optional[Dict[str, Any]]:
-        """
-        ✅ NUEVO: Garantiza consulta directa sin ningún cache
-        """
-        validate_required(codigo, "codigo")
-        
-        print(f"🚫 CONSULTA FORZADA SIN CACHE para producto: '{codigo}'")
-        
-        query = """
-        SELECT 
-            p.id,
-            p.Codigo,
-            p.Nombre,
-            p.Precio_venta,
-            p.Stock_Unitario as Stock_Original,
-            m.Nombre as Marca_Nombre,
-            -- RECALCULAR STOCK COMPLETO DESDE LOTES
-            ISNULL((SELECT SUM(l.Cantidad_Unitario) 
-                    FROM Lote l 
-                    WHERE l.Id_Producto = p.id), 0) as Stock_Total,
-            -- Información de lotes para debug
-            (SELECT COUNT(*) FROM Lote l WHERE l.Id_Producto = p.id AND l.Cantidad_Unitario > 0) as Lotes_Activos,
-            (SELECT COUNT(*) FROM Lote l WHERE l.Id_Producto = p.id) as Total_Lotes,
-            GETDATE() as Timestamp_Consulta
-        FROM Productos p
-        INNER JOIN Marca m ON p.ID_Marca = m.id
-        WHERE p.Codigo = ?
-        """
-        
-        # ✅ CONEXIÓN DIRECTA BYPASS COMPLETE
         conn = None
+        venta_id = None
+        lotes_afectados = []
+        
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
-            cursor.execute(query, (codigo,))
             
-            row = cursor.fetchone()
-            if row:
-                columns = [desc[0] for desc in cursor.description]
-                resultado = dict(zip(columns, row))
+            # Validar items
+            items_validados = []
+            total_venta = 0
+            
+            for i, item in enumerate(items):
+                codigo = str(item.get('codigo', '')).strip()
+                cantidad = int(item.get('cantidad', 0))
+                precio = float(item.get('precio', 0))
                 
-                # Usar stock calculado como el real
-                resultado['Stock_Unitario'] = resultado['Stock_Total']
+                if not codigo:
+                    raise VentaError(f"Item {i}: Código requerido")
+                if cantidad <= 0:
+                    raise VentaError(f"Item {i}: Cantidad debe ser mayor a 0")
+                if precio <= 0:
+                    raise VentaError(f"Item {i}: Precio debe ser mayor a 0")
                 
-                print(f"✅ Consulta directa producto {codigo}: Stock_Total={resultado['Stock_Total']}, Lotes_Activos={resultado['Lotes_Activos']}")
-                return resultado
-            else:
-                print(f"❌ Producto {codigo} no encontrado en consulta directa")
-                return None
+                # Obtener producto
+                producto = self.get_producto_por_codigo(codigo)
+                if not producto:
+                    raise ProductoNotFoundError(codigo=codigo)
                 
+                # Verificar disponibilidad FIFO
+                disponibilidad = self.producto_repo.verificar_disponibilidad_fifo(
+                    producto['id'], cantidad
+                )
+                
+                if not disponibilidad['disponible']:
+                    raise StockInsuficienteError(
+                        codigo, 
+                        disponibilidad['cantidad_total_disponible'], 
+                        cantidad
+                    )
+                
+                subtotal = cantidad * precio
+                total_venta += subtotal
+                
+                items_validados.append({
+                    'producto_id': producto['id'],
+                    'codigo': codigo,
+                    'nombre': producto['Nombre'],
+                    'cantidad': cantidad,
+                    'precio': precio,
+                    'subtotal': subtotal,
+                    'lotes_necesarios': disponibilidad['lotes_necesarios']
+                })
+            
+            print(f"📋 Items validados: {len(items_validados)}, Total: ${total_venta:.2f}")
+            
+            # Crear venta
+            cursor.execute("""
+                INSERT INTO Ventas (Id_Usuario, Fecha, Total)
+                OUTPUT INSERTED.id
+                VALUES (?, GETDATE(), ?)
+            """, (usuario_id, total_venta))
+            
+            resultado = cursor.fetchone()
+            if not resultado:
+                raise VentaError("Error creando venta")
+            
+            venta_id = resultado[0]
+            print(f"✅ Venta creada - ID: {venta_id}")
+            
+            # Procesar cada item usando FIFO
+            for item in items_validados:
+                try:
+                    lotes_utilizados = self.producto_repo.reducir_stock_fifo(
+                        item['producto_id'], item['cantidad']
+                    )
+                    lotes_afectados.extend(lotes_utilizados)
+                    
+                    print(f"📦 FIFO aplicado para {item['codigo']}: {len(lotes_utilizados)} lotes")
+                    
+                    # Crear DetallesVentas
+                    for lote_usado in lotes_utilizados:
+                        cursor.execute("""
+                            INSERT INTO DetallesVentas 
+                            (Id_Venta, Id_Lote, Cantidad_Unitario, Precio_Unitario)
+                            VALUES (?, ?, ?, ?)
+                        """, (
+                            venta_id,
+                            lote_usado['lote_id'],
+                            lote_usado['cantidad_reducida'],
+                            item['precio']
+                        ))
+                        
+                except Exception as fifo_error:
+                    print(f"❌ Error en FIFO para {item['codigo']}: {fifo_error}")
+                    raise StockInsuficienteError(
+                        item['codigo'], 0, item['cantidad']
+                    )
+            
+            conn.commit()
+            
+            # Limpiar cache
+            self._invalidate_cache_after_modification()
+            if hasattr(self.producto_repo, '_invalidate_cache_after_modification'):
+                self.producto_repo._invalidate_cache_after_modification()
+            
+            venta_completa = {
+                'id': venta_id,
+                'Id_Usuario': usuario_id,
+                'Fecha': datetime.now(),
+                'Total': total_venta,
+                'items_procesados': len(items_validados),
+                'lotes_afectados': len(lotes_afectados)
+            }
+            
+            print(f"🎉 Venta {venta_id} completada - FIFO aplicado")
+            return venta_completa
+            
         except Exception as e:
-            print(f"❌ Error en consulta directa: {e}")
-            return None
+            print(f"❌ Error en crear_venta: {e}")
+            
+            if conn:
+                conn.rollback()
+                print("🔄 Rollback ejecutado")
+            
+            if isinstance(e, (VentaError, ProductoNotFoundError, StockInsuficienteError)):
+                raise e
+            else:
+                raise VentaError(f"Error procesando venta: {str(e)}")
+            
         finally:
             if conn:
                 conn.close()
-        
-    def get_ventas_con_detalles(self, fecha_desde: str = None, fecha_hasta: str = None) -> List[Dict[str, Any]]:
-        """Obtiene ventas con sus detalles en período específico"""
-        where_clause = ""
-        params = []
-        
-        if fecha_desde and fecha_hasta:
-            where_clause = "WHERE v.Fecha BETWEEN ? AND ?"
-            params = [fecha_desde, fecha_hasta]
-        elif fecha_desde:
-            where_clause = "WHERE v.Fecha >= ?"
-            params = [fecha_desde]
-        elif fecha_hasta:
-            where_clause = "WHERE v.Fecha <= ?"
-            params = [fecha_hasta]
-        
-        query = f"""
-        SELECT 
-            v.id as Venta_ID,
-            v.Fecha,
-            v.Total as Venta_Total,
-            u.Nombre + ' ' + u.Apellido_Paterno as Vendedor,
-            COUNT(dv.id) as Items_Vendidos,
-            SUM(dv.Cantidad_Unitario) as Unidades_Totales
-        FROM Ventas v
-        INNER JOIN Usuario u ON v.Id_Usuario = u.id
-        LEFT JOIN DetallesVentas dv ON v.id = dv.Id_Venta
-        {where_clause}
-        GROUP BY v.id, v.Fecha, v.Total, u.Nombre, u.Apellido_Paterno
-        ORDER BY v.Fecha DESC
-        """
-        return self._execute_query(query, tuple(params), use_cache=False)
+
+    # ===== MÉTODOS DE CONSULTA (ya correctos) =====
     
     def get_venta_completa(self, venta_id: int) -> Dict[str, Any]:
-        """Obtiene venta con detalles CONSOLIDADOS por producto"""
-        
-
+        """Obtiene venta con detalles ORIGINALES"""
         validate_required(venta_id, "venta_id")
         
-        # Obtener datos principales de la venta
-        venta_query = """
-            SELECT v.*, u.Nombre + ' ' + u.Apellido_Paterno as Vendedor,
-            u.nombre_usuario as Vendedor_Email
-            FROM Ventas v
-            INNER JOIN Usuario u ON v.Id_Usuario = u.id
-            WHERE v.id = ?
-        """
-        venta = self._execute_query(venta_query, (venta_id,), fetch_one=True, use_cache=False)
-        
-        if not venta:
-            print(f"❌ DEBUG: Venta no encontrada para ID: {venta_id}")
-            raise VentaError(f"Venta no encontrada: {venta_id}", venta_id)
-        
-        # ✅ CONSULTA CONSOLIDADA: Agrupa productos iguales
-        detalles_query = """
-        SELECT 
-            p.Codigo as Producto_Codigo,
-            p.Nombre as Producto_Nombre,
-            m.Nombre as Marca_Nombre,
-            -- Consolidar cantidades y precios por producto
-            SUM(dv.Cantidad_Unitario) as Cantidad_Unitario,
-            -- Usar el precio unitario (debería ser igual para el mismo producto)
-            MAX(dv.Precio_Unitario) as Precio_Unitario,
-            -- Calcular subtotal consolidado
-            SUM(dv.Cantidad_Unitario * dv.Precio_Unitario) as Subtotal,
-            -- Para compatibilidad, mantener algunos campos adicionales
-            MIN(l.Fecha_Vencimiento) as Fecha_Vencimiento
-        FROM DetallesVentas dv
-        INNER JOIN Lote l ON dv.Id_Lote = l.id
-        INNER JOIN Productos p ON l.Id_Producto = p.id
-        INNER JOIN Marca m ON p.ID_Marca = m.id
-        WHERE dv.Id_Venta = ?
-        GROUP BY p.id, p.Codigo, p.Nombre, m.Nombre
-        ORDER BY p.Nombre ASC
-        """
-        
-        detalles = self._execute_query(detalles_query, (venta_id,), use_cache=False)
-        
-        if detalles:
-            for i, detalle in enumerate(detalles):
-                print(f"   Producto {i+1}: {detalle['Producto_Codigo']} - {detalle['Cantidad_Unitario']} unidades")
-        
-        venta['detalles'] = detalles
-        venta['total_items'] = len(detalles)
-        venta['total_unidades'] = sum(detalle['Cantidad_Unitario'] for detalle in detalles)
-        
-        print(f"✅ Venta completa consolidada: {len(detalles)} productos únicos")
-        return venta
-    
-    def get_venta_completa_consolidada(self, venta_id: int) -> Dict[str, Any]:
-        """Obtiene venta con detalles CONSOLIDADOS por producto (solo para UI)"""
-        
-        validate_required(venta_id, "venta_id")
-        
-        # Obtener datos principales de la venta
         venta_query = """
             SELECT v.*, u.Nombre + ' ' + u.Apellido_Paterno as Vendedor,
             u.nombre_usuario as Vendedor_Email
@@ -386,89 +549,6 @@ class VentaRepository(BaseRepository):
         if not venta:
             raise VentaError(f"Venta no encontrada: {venta_id}", venta_id)
         
-        # CORREGIDO: Consulta CONSOLIDADA con subtotal calculado correctamente
-        detalles_query = """
-        SELECT 
-            p.Codigo as Producto_Codigo,
-            p.Nombre as Producto_Nombre,
-            ISNULL(m.Nombre, 'Sin marca') as Marca_Nombre,
-            -- Consolidar cantidades por producto
-            SUM(dv.Cantidad_Unitario) as Cantidad_Unitario,
-            -- Usar el precio unitario más reciente (debería ser igual para el mismo producto)
-            MAX(dv.Precio_Unitario) as Precio_Unitario,
-            -- CORREGIDO: Calcular subtotal consolidado correctamente
-            SUM(dv.Cantidad_Unitario * dv.Precio_Unitario) as Subtotal,
-            -- Para compatibilidad, mantener algunos campos adicionales
-            MIN(l.Fecha_Vencimiento) as Fecha_Vencimiento,
-            -- Para debug: mostrar cálculo individual
-            COUNT(dv.id) as Numero_Registros
-        FROM DetallesVentas dv
-        INNER JOIN Lote l ON dv.Id_Lote = l.id
-        INNER JOIN Productos p ON l.Id_Producto = p.id
-        LEFT JOIN Marca m ON p.ID_Marca = m.id
-        WHERE dv.Id_Venta = ?
-        GROUP BY p.id, p.Codigo, p.Nombre, m.Nombre
-        ORDER BY p.Nombre ASC
-        """
-        
-
-        detalles = self._execute_query(detalles_query, (venta_id,), use_cache=False)
-        
-        if detalles:
-            
-            # CORREGIDO: Verificar y corregir subtotales
-            total_verificacion = 0
-            for i, detalle in enumerate(detalles):
-                cantidad = float(detalle.get('Cantidad_Unitario', 0))
-                precio = float(detalle.get('Precio_Unitario', 0))
-                subtotal_bd = float(detalle.get('Subtotal', 0))
-                subtotal_calculado = cantidad * precio
-                
-                # Verificar discrepancias
-                if abs(subtotal_bd - subtotal_calculado) > 0.01:
-                    print(f"⚠️ Discrepancia en {detalle['Producto_Codigo']}: BD={subtotal_bd}, Calc={subtotal_calculado}")
-                    # Usar el calculado como más confiable
-                    detalle['Subtotal'] = subtotal_calculado
-                
-                total_verificacion += float(detalle['Subtotal'])
-                
-                print(f"   Producto {i+1}: {detalle['Producto_Codigo']} - "
-                    f"Cant: {cantidad}, Precio: {precio}, Subtotal: {detalle['Subtotal']}")
-            
-            # Verificar total general
-            total_venta = float(venta['Total'])
-            if abs(total_verificacion - total_venta) > 0.01:
-                print(f"⚠️ Total venta BD: {total_venta}, Total calculado: {total_verificacion}")
-        else:
-            print(f"⚠️ No se encontraron detalles para venta {venta_id}")
-            detalles = []
-        
-        venta['detalles'] = detalles
-        venta['total_items'] = len(detalles)
-        venta['total_unidades'] = sum(float(detalle.get('Cantidad_Unitario', 0)) for detalle in detalles)
-        
-        print(f"✅ Venta completa consolidada: {len(detalles)} productos únicos")
-        return venta
-
-    def get_venta_completa(self, venta_id: int) -> Dict[str, Any]:
-        """Obtiene venta con detalles ORIGINALES (para operaciones que requieren Id_Lote)"""
-        
-        validate_required(venta_id, "venta_id")
-        
-        # Obtener datos principales de la venta
-        venta_query = """
-            SELECT v.*, u.Nombre + ' ' + u.Apellido_Paterno as Vendedor,
-            u.nombre_usuario as Vendedor_Email
-            FROM Ventas v
-            INNER JOIN Usuario u ON v.Id_Usuario = u.id
-            WHERE v.id = ?
-        """
-        venta = self._execute_query(venta_query, (venta_id,), fetch_one=True, use_cache=False)
-        
-        if not venta:
-            raise VentaError(f"Venta no encontrada: {venta_id}", venta_id)
-        
-        # Consulta ORIGINAL con Id_Lote para operaciones
         detalles_query = """
         SELECT 
             dv.*,
@@ -491,731 +571,55 @@ class VentaRepository(BaseRepository):
         venta['total_unidades'] = sum(detalle['Cantidad_Unitario'] for detalle in detalles)
         
         return venta
-    def get_ventas_por_periodo(self, periodo: str = 'hoy') -> List[Dict[str, Any]]:
-        """Obtiene ventas por período (hoy, semana, mes)"""
-        if periodo == 'hoy':
-            where_clause = "WHERE CAST(v.Fecha AS DATE) = CAST(GETDATE() AS DATE)"
-        elif periodo == 'semana':
-            where_clause = "WHERE v.Fecha >= DATEADD(WEEK, -1, GETDATE())"
-        elif periodo == 'mes':
-            where_clause = "WHERE v.Fecha >= DATEADD(MONTH, -1, GETDATE())"
-        else:
-            where_clause = ""
-        
-        query = f"""
-        SELECT v.*, u.Nombre + ' ' + u.Apellido_Paterno as Vendedor
-        FROM Ventas v
-        INNER JOIN Usuario u ON v.Id_Usuario = u.id
-        {where_clause}
-        ORDER BY v.Fecha DESC
-        """
-        return self._execute_query(query, use_cache=False)
-    
-    @ExceptionHandler.handle_exception
-    def crear_venta(self, usuario_id: int, items: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-        """
-        ✅ CORREGIDO: Crea venta usando sistema FIFO de lotes
-        Reduce stock de lotes automáticamente y actualiza Stock_Unitario en Productos
-        """
-        validate_required(usuario_id, "usuario_id")
-        validate_required(items, "items")
-        
-        if not items:
-            raise VentaError("No hay items para vender")
-        
-        conn = None
-        venta_id = None
-        lotes_afectados = []  # Para rollback en caso de error
-        
-        try:
-            conn = self._get_connection()
-            cursor = conn.cursor()
-            
-            # PASO 1: Validar y preparar items
-            items_validados = []
-            total_venta = 0
-            
-            for i, item in enumerate(items):
-                codigo = str(item.get('codigo', '')).strip()
-                cantidad = int(item.get('cantidad', 0))
-                precio = float(item.get('precio', 0))
-                
-                if not codigo:
-                    raise VentaError(f"Item {i}: Código requerido")
-                if cantidad <= 0:
-                    raise VentaError(f"Item {i}: Cantidad debe ser mayor a 0")
-                if precio <= 0:
-                    raise VentaError(f"Item {i}: Precio debe ser mayor a 0")
-                
-                # Obtener producto desde tabla Productos
-                producto = self.get_producto_por_codigo(codigo)
-                if not producto:
-                    raise ProductoNotFoundError(codigo=codigo)
-                
-                # PASO 2: Verificar disponibilidad FIFO ANTES de procesar
-                from ..repositories.producto_repository import ProductoRepository
-                producto_repo = ProductoRepository()
-                
-                disponibilidad = producto_repo.verificar_disponibilidad_fifo(
-                    producto['id'], cantidad
-                )
-                
-                if not disponibilidad['disponible']:
-                    raise StockInsuficienteError(
-                        codigo, 
-                        disponibilidad['cantidad_total_disponible'], 
-                        cantidad
-                    )
-                
-                # Calcular subtotal
-                subtotal = cantidad * precio
-                total_venta += subtotal
-                
-                items_validados.append({
-                    'producto_id': producto['id'],
-                    'codigo': codigo,
-                    'nombre': producto['Nombre'],
-                    'cantidad': cantidad,
-                    'precio': precio,
-                    'subtotal': subtotal,
-                    'lotes_necesarios': disponibilidad['lotes_necesarios']
-                })
-            
-            print(f"🔍 Items validados: {len(items_validados)}, Total: ${total_venta:.2f}")
-            
-            # PASO 3: Crear venta en tabla Ventas
-            cursor.execute("""
-                INSERT INTO Ventas (Id_Usuario, Fecha, Total)
-                OUTPUT INSERTED.id
-                VALUES (?, GETDATE(), ?)
-            """, (usuario_id, total_venta))
-            
-            resultado = cursor.fetchone()
-            if not resultado:
-                raise VentaError("Error creando venta en base de datos")
-            
-            venta_id = resultado[0]
-            print(f"✅ Venta creada - ID: {venta_id}")
-            
-            # PASO 4: Procesar cada item usando FIFO
-            for item in items_validados:
-                producto_id = item['producto_id']
-                cantidad_total = item['cantidad']
-                precio_unitario = item['precio']
-                
-                # USAR SISTEMA FIFO PARA REDUCIR STOCK DE LOTES
-                try:
-                    lotes_utilizados = producto_repo.reducir_stock_fifo(
-                        producto_id, cantidad_total
-                    )
-                    lotes_afectados.extend(lotes_utilizados)
-                    
-                    print(f"📦 FIFO aplicado para {item['codigo']}: {len(lotes_utilizados)} lotes afectados")
-                    
-                except Exception as fifo_error:
-                    print(f"❌ Error en FIFO para {item['codigo']}: {fifo_error}")
-                    raise StockInsuficienteError(
-                        item['codigo'], 
-                        0,  # No sabemos stock exacto después del error
-                        cantidad_total
-                    )
-                
-                # PASO 5: Crear registros en DetallesVentas
-                # Un registro por cada lote utilizado
-                for lote_usado in lotes_utilizados:
-                    cursor.execute("""
-                        INSERT INTO DetallesVentas 
-                        (Id_Venta, Id_Lote, Cantidad_Unitario, Precio_Unitario)
-                        VALUES (?, ?, ?, ?)
-                    """, (
-                        venta_id,
-                        lote_usado['lote_id'],
-                        lote_usado['cantidad_reducida'],
-                        precio_unitario
-                    ))
-            
-            # PASO 6: Commit de toda la transacción
-            conn.commit()
-            
-            # PASO 7: Limpiar cache después de éxito
-            self._invalidate_cache_after_modification()
-            if hasattr(producto_repo, '_invalidate_cache_after_modification'):
-                producto_repo._invalidate_cache_after_modification()
-            
-            # PASO 8: Retornar información de la venta creada
-            venta_completa = {
-                'id': venta_id,
-                'Id_Usuario': usuario_id,
-                'Fecha': datetime.now(),
-                'Total': total_venta,
-                'items_procesados': len(items_validados),
-                'lotes_afectados': len(lotes_afectados)
-            }
-            
-            print(f"🎉 Venta {venta_id} completada exitosamente - FIFO aplicado correctamente")
-            return venta_completa
-            
-        except Exception as e:
-            print(f"❌ Error en crear_venta: {e}")
-            
-            # ROLLBACK en caso de error
-            if conn:
-                conn.rollback()
-                print("🔄 Rollback ejecutado")
-            
-            # Intentar restaurar lotes afectados (opcional)
-            if lotes_afectados:
-                try:
-                    self._intentar_rollback_lotes(lotes_afectados)
-                except:
-                    print("⚠️ No se pudo restaurar lotes automáticamente")
-            
-            # Re-lanzar excepción apropiada
-            if isinstance(e, (VentaError, ProductoNotFoundError, StockInsuficienteError)):
-                raise e
-            else:
-                raise VentaError(f"Error procesando venta: {str(e)}")
-            
-        finally:
-            if conn:
-                conn.close()
-    def _intentar_rollback_lotes(self, lotes_afectados: List[Dict[str, Any]]):
-        """
-        ✅ NUEVO: Intenta restaurar lotes en caso de rollback
-        """
-        try:
-            conn = self._get_connection()
-            cursor = conn.cursor()
-            
-            for lote in lotes_afectados:
-                # Restaurar cantidad original
-                cantidad_restaurar = lote['cantidad_reducida']
-                cantidad_final_original = lote['cantidad_final']
-                cantidad_original = cantidad_final_original + cantidad_restaurar
-                
-                cursor.execute("""
-                    UPDATE Lote 
-                    SET Cantidad_Unitario = ?
-                    WHERE id = ?
-                """, (cantidad_original, lote['lote_id']))
-            
-            conn.commit()
-            print(f"🔄 Rollback de lotes completado: {len(lotes_afectados)} lotes restaurados")
-            
-        except Exception as rollback_error:
-            print(f"❌ Error en rollback de lotes: {rollback_error}")
-        finally:
-            if conn:
-                conn.close()
-    
-    def _validar_y_preparar_item_desde_productos(self, item: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        ✅ NUEVO: Valida y prepara un item usando datos directos de tabla Productos
-        """
-        
-        try:
-            # Validaciones básicas
-            codigo = item.get('codigo', '').strip()
-            cantidad = item.get('cantidad', 0)
-            precio = item.get('precio')
-            
-            validate_required(codigo, "codigo")
-            validate_positive_number(cantidad, "cantidad")
-            
-            # ✅ OBTENER PRODUCTO DIRECTAMENTE DE TABLA PRODUCTOS
-            producto = self.get_producto_por_codigo(codigo)
-            if not producto:
-                raise ProductoNotFoundError(codigo=codigo)
-            
-            # ✅ VERIFICAR STOCK DIRECTAMENTE DE PRODUCTO
-            stock_disponible = producto['Stock_Unitario'] or 0
-            if stock_disponible < cantidad:
-                raise StockInsuficienteError(
-                    f"Producto {codigo}", 
-                    stock_disponible, 
-                    cantidad
-                )
-            # Usar precio del producto si no se especifica
-            if precio is None:
-                precio = float(producto['Precio_venta'])
-            else:
-                validate_positive_number(precio, "precio")
-            
-            subtotal = Decimal(str(cantidad)) * Decimal(str(precio))
-            
-            item_preparado = {
-                'codigo': codigo,
-                'producto_id': producto['id'],
-                'producto_nombre': producto['Nombre'],
-                'cantidad': cantidad,
-                'precio': precio,
-                'subtotal': subtotal,
-                'stock_disponible': stock_disponible
-            }
-            
-            return item_preparado
-            
-        except Exception as e:
-            print(f"❌ ERROR en _validar_y_preparar_item_desde_productos: {e}")
-            raise e
-    
-    def _crear_venta_con_transaccion(self, usuario_id: int, items_preparados: List[Dict], total_venta: Decimal) -> Dict[str, Any]:
-        """
-        ✅ MODIFICADO: Crea venta actualizando stock directamente en tabla Productos
-        """
-        conn = None
-        venta_id = None
-        
-        try:
-            # Obtener conexión única para toda la transacción
-            conn = self._get_connection()
-            cursor = conn.cursor()
-            
-            print("📄 Iniciando transacción completa de venta...")
-            
-            # ✅ Invalidar caché ANTES de procesar venta
-            self._invalidate_cache_before_transaction()
-            
-            # PASO 1: Insertar venta principal
-            venta_query = """
-            INSERT INTO Ventas (Id_Usuario, Fecha, Total) 
-            OUTPUT INSERTED.id 
-            VALUES (?, ?, ?)
-            """
-            
-            cursor.execute(venta_query, (usuario_id, datetime.now(), float(total_venta)))
-            venta_result = cursor.fetchone()
-            
-            if not venta_result:
-                raise VentaError("Error creando venta principal")
-            
-            venta_id = venta_result[0]
-            print(f"💰 Venta creada en transacción - ID: {venta_id}, Total: ${total_venta}")
-            
-            # PASO 2: Procesar todos los items
-            todos_los_detalles = []
-            
-            for i, item in enumerate(items_preparados):
-                print(f"📄 Procesando item {i} en transacción...")
-                
-                # ✅ REDUCIR STOCK DIRECTAMENTE EN TABLA PRODUCTOS
-                update_stock_query = """
-                UPDATE Productos 
-                SET Stock_Unitario = Stock_Unitario - ?
-                WHERE id = ? AND Stock_Unitario >= ?
-                """
-                
-                cursor.execute(update_stock_query, (
-                    item['cantidad'],
-                    item['producto_id'],
-                    item['cantidad']
-                ))
-                
-                if cursor.rowcount == 0:
-                    raise StockInsuficienteError(
-                        item['codigo'], 
-                        item['stock_disponible'], 
-                        item['cantidad']
-                    )
-                
-                print(f"📦 Stock actualizado para producto {item['codigo']}")
-                
-                # CREAR DETALLE DE VENTA (usando lote ficticio o predeterminado)
-                lote_query = """
-                SELECT TOP 1 id, Cantidad_Unitario FROM Lote 
-                WHERE Id_Producto = ? AND Cantidad_Unitario > 0
-                ORDER BY Fecha_Vencimiento ASC
-                """
-                cursor.execute(lote_query, (item['producto_id'],))
-                lote_result = cursor.fetchone()
 
-                if lote_result:
-                    lote_id, cantidad_lote = lote_result[0], lote_result[1]
-                    
-                    # NUEVA LÓGICA: Usar múltiples lotes si es necesario
-                    cantidad_restante = item['cantidad']
-                    
-                    # Obtener todos los lotes disponibles para este producto
-                    lotes_query = """
-                    SELECT id, Cantidad_Unitario FROM Lote 
-                    WHERE Id_Producto = ? AND Cantidad_Unitario > 0
-                    ORDER BY Fecha_Vencimiento ASC
-                    """
-                    cursor.execute(lotes_query, (item['producto_id'],))
-                    lotes_disponibles = cursor.fetchall()
-                    
-                    lotes_a_usar = []
-                    
-                    for lote_id, cantidad_lote in lotes_disponibles:
-                        if cantidad_restante <= 0:
-                            break
-                            
-                        cantidad_a_usar = min(cantidad_restante, cantidad_lote)
-                        lotes_a_usar.append((lote_id, cantidad_a_usar))
-                        cantidad_restante -= cantidad_a_usar
-                    
-                    # Si no hay suficientes lotes, crear lote temporal
-                    if cantidad_restante > 0:
-                        insert_lote_query = """
-                        INSERT INTO Lote (Id_Producto, Cantidad_Unitario, Fecha_Vencimiento)
-                        OUTPUT INSERTED.id
-                        VALUES (?, ?, GETDATE())
-                        """
-                        cursor.execute(insert_lote_query, (item['producto_id'], cantidad_restante))
-                        lote_temporal = cursor.fetchone()
-                        if lote_temporal:
-                            lotes_a_usar.append((lote_temporal[0], cantidad_restante))
-                    
-                    # Actualizar cada lote usado y crear detalles
-                    for lote_id, cantidad_usada in lotes_a_usar:
-                        # Actualizar lote (solo si no es temporal)
-                        if cantidad_usada <= cantidad_lote:  # Validar antes de actualizar
-                            update_lote_query = """
-                            UPDATE Lote 
-                            SET Cantidad_Unitario = Cantidad_Unitario - ?
-                            WHERE id = ? AND Cantidad_Unitario >= ?
-                            """
-                            cursor.execute(update_lote_query, (cantidad_usada, lote_id, cantidad_usada))
-                        
-                        # Crear detalle de venta
-                        detalle_query = """
-                        INSERT INTO DetallesVentas (Id_Venta, Id_Lote, Cantidad_Unitario, Precio_Unitario, Detalles)
-                        OUTPUT INSERTED.id
-                        VALUES (?, ?, ?, ?, ?)
-                        """
-                        
-                        detalle_data = f"Venta - {item['producto_nombre']} (Lote: {lote_id})"
-                        
-                        cursor.execute(detalle_query, (
-                            venta_id,
-                            lote_id,
-                            cantidad_usada,
-                            item['precio'],
-                            detalle_data
-                        ))
-            
-            # PASO 3: Commit de toda la transacción
-            conn.commit()
-            print(f"✅ Transacción completada - Venta: {venta_id}, Detalles: {len(todos_los_detalles)}")
-            
-            # ✅ Invalidar caché DESPUÉS de commit exitoso
-            self._invalidate_cache_after_modification()
-            
-            # PASO 4: Retornar venta completa SIN CACHÉ
-            return self.get_venta_completa(venta_id)
-            
-        except Exception as e:
-            print(f"❌ ERROR en transacción de venta: {e}")
-            if conn:
-                conn.rollback()
-                print("📄 Rollback realizado")
-            
-            # Si se creó la venta pero falló después, intentar limpiar
-            if venta_id:
-                try:
-                    self._limpiar_venta_fallida(venta_id)
-                except:
-                    pass
-            
-            raise VentaError(f"Error creando venta: {str(e)}")
-        
-        finally:
-            if conn:
-                conn.close()
-    
-    # ✅ NUEVO: Método para actualizar venta
-    def actualizar_venta(self, venta_id: int, nuevo_total: float = None) -> bool:
-        """
-        Actualiza una venta existente
-        """
-        try:
-            if nuevo_total is not None:
-                query = "UPDATE Ventas SET Total = ? WHERE id = ?"
-                params = (nuevo_total, venta_id)
-            else:
-                return False
-            
-            result = self.execute_transaction([(query, params)])
-            
-            if result:
-                self._invalidate_cache_after_modification()
-                print(f"✅ Venta {venta_id} actualizada exitosamente")
-                return True
-            
-            return False
-            
-        except Exception as e:
-            print(f"❌ Error actualizando venta {venta_id}: {e}")
-            return False
-    
-    # ✅ NUEVO: Método para eliminar venta
-    @ExceptionHandler.handle_exception
-    def eliminar_venta(self, venta_id: int) -> bool:
-        """
-        ✅ CORREGIDO: Elimina venta y RESTAURA stock a lotes usando información de DetallesVentas
-        """
+    def get_venta_completa_consolidada(self, venta_id: int) -> Dict[str, Any]:
+        """Obtiene venta con detalles CONSOLIDADOS por producto"""
         validate_required(venta_id, "venta_id")
         
-        conn = None
-        productos_restaurados = []
+        venta_query = """
+            SELECT v.*, u.Nombre + ' ' + u.Apellido_Paterno as Vendedor,
+            u.nombre_usuario as Vendedor_Email
+            FROM Ventas v
+            INNER JOIN Usuario u ON v.Id_Usuario = u.id
+            WHERE v.id = ?
+        """
+        venta = self._execute_query(venta_query, (venta_id,), fetch_one=True, use_cache=False)
         
-        try:
-            conn = self._get_connection()
-            cursor = conn.cursor()
-            
-            print(f"🗑️ Iniciando eliminación de venta {venta_id}")
-            
-            # PASO 1: Obtener detalles de la venta para restaurar stock
-            detalles_venta = self.get_detalles_venta_para_restauracion(venta_id)
-            if not detalles_venta:
-                raise VentaError(f"Venta {venta_id} no encontrada")
-            
-            # PASO 2: RESTAURAR stock a los lotes originales
-            for detalle in detalles_venta:
-                lote_id = detalle['Id_Lote']
-                cantidad_a_restaurar = detalle['Cantidad_Unitario']
-                producto_id = detalle['Id_Producto']
-                
-                # Restaurar cantidad al lote específico
-                cursor.execute("""
-                    UPDATE Lote 
-                    SET Cantidad_Unitario = Cantidad_Unitario + ?
-                    WHERE id = ?
-                """, (cantidad_a_restaurar, lote_id))
-                
-                productos_restaurados.append({
-                    'lote_id': lote_id,
-                    'cantidad_restaurada': cantidad_a_restaurar,
-                    'producto_id': producto_id
-                })
-            
-            # PASO 3: Actualizar Stock_Unitario en tabla Productos
-            productos_afectados = set()
-            for restaurado in productos_restaurados:
-                productos_afectados.add(restaurado['producto_id'])
-            
-            for producto_id in productos_afectados:
-                cursor.execute("""
-                    UPDATE Productos 
-                    SET Stock_Unitario = (
-                        SELECT ISNULL(SUM(l.Cantidad_Unitario), 0) 
-                        FROM Lote l 
-                        WHERE l.Id_Producto = ?
-                    )
-                    WHERE id = ?
-                """, (producto_id, producto_id))
-            
-            print(f"✅ Stock restaurado a {len(productos_restaurados)} lotes")
-            
-            # PASO 4: ELIMINAR detalles de venta
-            cursor.execute("DELETE FROM DetallesVentas WHERE Id_Venta = ?", (venta_id,))
-            detalles_eliminados = cursor.rowcount
-            
-            # PASO 5: ELIMINAR la venta
-            cursor.execute("DELETE FROM Ventas WHERE id = ?", (venta_id,))
-            ventas_eliminadas = cursor.rowcount
-            
-            if ventas_eliminadas == 0:
-                raise VentaError(f"Venta {venta_id} no encontrada para eliminar")
-            
-            # PASO 6: Commit de toda la operación
-            conn.commit()
-            
-            # Limpiar cache
-            self._invalidate_cache_after_modification()
-            
-            print(f"🎉 Venta {venta_id} eliminada exitosamente - Stock restaurado a lotes")
-            return True
-            
-        except Exception as e:
-            print(f"❌ Error eliminando venta {venta_id}: {e}")
-            
-            if conn:
-                conn.rollback()
-                print("🔄 Rollback ejecutado")
-            
-            raise VentaError(f"Error eliminando venta: {str(e)}")
-        
-        finally:
-            if conn:
-                conn.close()
-
-    def get_detalles_venta_para_restauracion(self, venta_id: int) -> List[Dict[str, Any]]:
-        """
-        ✅ CORREGIDO: Obtiene detalles de venta sin columna Subtotal inexistente
-        """
-        query = """
-        SELECT 
-            dv.Id_Lote,
-            dv.Cantidad_Unitario,
-            dv.Precio_Unitario,
-            (dv.Cantidad_Unitario * dv.Precio_Unitario) as Subtotal,
-            l.Id_Producto,
-            p.Codigo as Producto_Codigo,
-            p.Nombre as Producto_Nombre
-        FROM DetallesVentas dv
-        INNER JOIN Lote l ON dv.Id_Lote = l.id
-        INNER JOIN Productos p ON l.Id_Producto = p.id
-        WHERE dv.Id_Venta = ?
-        ORDER BY dv.id
-        """
-        
-        try:
-            detalles = self._execute_query(query, (venta_id,)) or []
-            print(f"📋 Detalles obtenidos para restauración: {len(detalles)} registros")
-            return detalles
-        except Exception as e:
-            print(f"❌ Error obteniendo detalles para restauración: {e}")
-            return []
-        
-    def _invalidate_cache_before_transaction(self):
-        """Invalida caché antes de iniciar transacciones"""
-        try:
-            # Invalidar caché del producto repository
-            if hasattr(self.producto_repo, '_invalidate_cache_after_modification'):
-                self.producto_repo._invalidate_cache_after_modification()
-                print("🔄 Caché ProductoRepository invalidado antes de transacción")
-                
-            # Invalidar caché propio
-            self._invalidate_cache_after_modification()
-            print("🔄 Caché VentaRepository invalidado antes de transacción")
-            
-        except Exception as e:
-            print(f"⚠️ Error invalidando caché antes de transacción: {e}")
-    
-    def _invalidate_cache_after_modification(self):
-        """
-        ✅ MEJORADO: Invalidación completa y forzada
-        """
-        try:
-            print("🧹 INICIANDO INVALIDACIÓN COMPLETA DE CACHE...")
-            
-            # Limpiar todos los tipos de caché posibles
-            caches_to_clear = [
-                '_cache', '_query_cache', '_result_cache', '_data_cache', 
-                '_product_cache', '_stock_cache', '_search_cache'
-            ]
-            
-            cache_cleared_count = 0
-            for cache_name in caches_to_clear:
-                if hasattr(self, cache_name):
-                    cache_obj = getattr(self, cache_name)
-                    if hasattr(cache_obj, 'clear'):
-                        cache_obj.clear()
-                        cache_cleared_count += 1
-                        print(f"   🗑️ {cache_name} limpiado")
-            
-            # Resetear timestamps de caché
-            timestamp_attrs = [
-                '_last_cache_time', '_cache_timestamp', '_last_update',
-                '_last_product_cache', '_last_stock_update'
-            ]
-            
-            for attr_name in timestamp_attrs:
-                if hasattr(self, attr_name):
-                    setattr(self, attr_name, None)
-            
-            # Forzar recarga en próximas consultas
-            self._force_reload = True
-            self._force_reload_productos = True
-            self._bypass_all_cache = True
-            
-            #print(f"✅ INVALIDACIÓN COMPLETA: {cache_cleared_count} caches limpiados, flags de bypass activados")
-            
-            # También invalidar ProductoRepository si está disponible
-            if hasattr(self, 'producto_repo') and self.producto_repo:
-                if hasattr(self.producto_repo, '_invalidate_cache_after_modification'):
-                    self.producto_repo._invalidate_cache_after_modification()
-                    print("   🔄 ProductoRepository cache también invalidado")
-            
-        except Exception as e:
-            print(f"⚠️ Error en invalidación completa: {e}")
-    
-    def _limpiar_venta_fallida(self, venta_id: int):
-        """Limpia una venta que falló durante la creación"""
-        try:
-            operaciones = [
-                ("DELETE FROM DetallesVentas WHERE Id_Venta = ?", (venta_id,)),
-                ("DELETE FROM Ventas WHERE id = ?", (venta_id,))
-            ]
-            
-            success = self.execute_transaction(operaciones)
-            if success:
-                print(f"🗑️ Venta fallida limpiada: {venta_id}")
-        except Exception as e:
-            print(f"⚠️ Error limpiando venta fallida {venta_id}: {e}")
-    
-    @ExceptionHandler.handle_exception
-    def anular_venta(self, venta_id: int, motivo: str = "Anulación manual") -> bool:
-        """
-        Anula una venta y restaura el stock usando datos directos de Productos
-        """
-        validate_required(venta_id, "venta_id")
-        
-        print(f"❌ Iniciando anulación - Venta ID: {venta_id}")
-        
-        # Obtener venta completa
-        venta = self.get_venta_completa(venta_id)
         if not venta:
             raise VentaError(f"Venta no encontrada: {venta_id}", venta_id)
         
-        # Restaurar stock por cada detalle
-        operaciones = []
+        detalles_query = """
+        SELECT 
+            p.Codigo as Producto_Codigo,
+            p.Nombre as Producto_Nombre,
+            ISNULL(m.Nombre, 'Sin marca') as Marca_Nombre,
+            SUM(dv.Cantidad_Unitario) as Cantidad_Unitario,
+            MAX(dv.Precio_Unitario) as Precio_Unitario,
+            SUM(dv.Cantidad_Unitario * dv.Precio_Unitario) as Subtotal,
+            MIN(l.Fecha_Vencimiento) as Fecha_Vencimiento,
+            COUNT(dv.id) as Numero_Registros
+        FROM DetallesVentas dv
+        INNER JOIN Lote l ON dv.Id_Lote = l.id
+        INNER JOIN Productos p ON l.Id_Producto = p.id
+        LEFT JOIN Marca m ON p.ID_Marca = m.id
+        WHERE dv.Id_Venta = ?
+        GROUP BY p.id, p.Codigo, p.Nombre, m.Nombre
+        ORDER BY p.Nombre ASC
+        """
         
-        for detalle in venta['detalles']:
-            # Obtener ID del producto desde el lote
-            producto_query = """
-            SELECT l.Id_Producto FROM Lote l WHERE l.id = ?
-            """
-            
-            conn = self._get_connection()
-            cursor = conn.cursor()
-            cursor.execute(producto_query, (detalle['Id_Lote'],))
-            producto_result = cursor.fetchone()
-            conn.close()
-            
-            if producto_result:
-                producto_id = producto_result[0]
-                
-                # Restaurar en tabla Productos
-                restore_producto_query = """
-                UPDATE Productos 
-                SET Stock_Unitario = Stock_Unitario + ?
-                WHERE id = ?
-                """
-                operaciones.append((restore_producto_query, (detalle['Cantidad_Unitario'], producto_id)))
-                
-                # Restaurar en el lote original
-                restore_lote_query = """
-                UPDATE Lote 
-                SET Cantidad_Unitario = Cantidad_Unitario + ?
-                WHERE id = ?
-                """
-                operaciones.append((restore_lote_query, (detalle['Cantidad_Unitario'], detalle['Id_Lote'])))
+        detalles = self._execute_query(detalles_query, (venta_id,), use_cache=False)
         
-        # Eliminar detalles de venta
-        delete_detalles_query = "DELETE FROM DetallesVentas WHERE Id_Venta = ?"
-        operaciones.append((delete_detalles_query, (venta_id,)))
+        venta['detalles'] = detalles
+        venta['total_items'] = len(detalles)
+        venta['total_unidades'] = sum(float(d.get('Cantidad_Unitario', 0)) for d in detalles)
         
-        # Eliminar venta
-        delete_venta_query = "DELETE FROM Ventas WHERE id = ?"
-        operaciones.append((delete_venta_query, (venta_id,)))
-        
-        # Ejecutar todas las operaciones en transacción
-        success = self.execute_transaction(operaciones)
-        
-        if success:
-            # Invalidar caché después de anulación
-            self._invalidate_cache_after_modification()
-            print(f"✅ Venta anulada - ID: {venta_id}, Items restaurados: {len(venta['detalles'])}")
-        
-        return success
+        return venta
+
+    # ===== MÉTODOS DE ACTUALIZACIÓN Y ELIMINACIÓN =====
     
     @ExceptionHandler.handle_exception
     def actualizar_venta_completa(self, venta_id: int, nuevos_productos: List[Dict[str, Any]]) -> bool:
-        """
-        ✅ CORREGIDO: Actualiza venta evitando deadlocks y loops infinitos
-        """
+        """Actualiza venta evitando deadlocks"""
         validate_required(venta_id, "venta_id")
         validate_required(nuevos_productos, "nuevos_productos")
         
@@ -1230,12 +634,11 @@ class VentaRepository(BaseRepository):
             
             print(f"🔄 Iniciando actualización de venta {venta_id}")
             
-            # PASO 1: Obtener y RESTAURAR stock de la venta original
+            # Restaurar stock
             detalles_originales = self.get_detalles_venta_para_restauracion(venta_id)
             if not detalles_originales:
                 raise VentaError(f"Venta {venta_id} no encontrada")
             
-            # Restaurar stock
             for detalle in detalles_originales:
                 cursor.execute("""
                     UPDATE Lote 
@@ -1243,25 +646,12 @@ class VentaRepository(BaseRepository):
                     WHERE id = ?
                 """, (detalle['Cantidad_Unitario'], detalle['Id_Lote']))
             
-            # Actualizar Stock_Unitario en tabla Productos
-            productos_afectados = set(detalle['Id_Producto'] for detalle in detalles_originales)
-            for producto_id in productos_afectados:
-                cursor.execute("""
-                    UPDATE Productos 
-                    SET Stock_Unitario = (
-                        SELECT ISNULL(SUM(l.Cantidad_Unitario), 0) 
-                        FROM Lote l 
-                        WHERE l.Id_Producto = ?
-                    )
-                    WHERE id = ?
-                """, (producto_id, producto_id))
+            print(f"✅ Stock restaurado")
             
-            print(f"✅ Stock restaurado para {len(detalles_originales)} detalles")
-            
-            # PASO 2: ELIMINAR detalles de venta originales
+            # Eliminar detalles originales
             cursor.execute("DELETE FROM DetallesVentas WHERE Id_Venta = ?", (venta_id,))
             
-            # PASO 3: VALIDAR productos SIN usar verificación FIFO compleja
+            # Validar nuevos productos
             total_nueva_venta = 0
             items_para_procesar = []
             
@@ -1273,12 +663,17 @@ class VentaRepository(BaseRepository):
                 if not codigo or cantidad <= 0 or precio <= 0:
                     raise VentaError(f"Producto {i}: Datos inválidos")
                 
-                # Verificación simple de stock disponible
+                # ✅ Verificar stock desde lotes
                 cursor.execute("""
                     SELECT p.id, 
-                        ISNULL((SELECT SUM(l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) as Stock_Disponible
+                        ISNULL((
+                            SELECT SUM(l.Cantidad_Unitario) 
+                            FROM Lote l 
+                            WHERE l.Id_Producto = p.id 
+                              AND l.Estado = 'ACTIVO'
+                        ), 0) as Stock_Disponible
                     FROM Productos p
-                    WHERE p.Codigo = ?
+                    WHERE p.Codigo = ? AND p.Activo = 1
                 """, (codigo,))
                 
                 producto_result = cursor.fetchone()
@@ -1302,35 +697,39 @@ class VentaRepository(BaseRepository):
             
             print(f"✅ Productos validados: {len(items_para_procesar)}")
             
-            # PASO 4: APLICAR nueva venta usando FIFO simple
+            # Aplicar nueva venta usando FIFO
             for item in items_para_procesar:
                 cantidad_restante = item['cantidad']
                 
-                # Obtener lotes disponibles ordenados por FIFO
                 cursor.execute("""
                     SELECT id, Cantidad_Unitario 
                     FROM Lote 
-                    WHERE Id_Producto = ? AND Cantidad_Unitario > 0
-                    ORDER BY Fecha_Vencimiento ASC, id ASC
+                    WHERE Id_Producto = ? 
+                      AND Cantidad_Unitario > 0 
+                      AND Estado = 'ACTIVO'
+                    ORDER BY 
+                        CASE WHEN Fecha_Vencimiento IS NOT NULL 
+                             THEN Fecha_Vencimiento 
+                             ELSE '9999-12-31' 
+                        END ASC,
+                        Fecha_Compra ASC,
+                        id ASC
                 """, (item['producto_id'],))
                 
                 lotes_disponibles = cursor.fetchall()
                 
-                # Reducir stock de lotes y crear detalles
                 for lote_id, cantidad_lote in lotes_disponibles:
                     if cantidad_restante <= 0:
                         break
                     
                     cantidad_a_usar = min(cantidad_restante, cantidad_lote)
                     
-                    # Reducir stock del lote
                     cursor.execute("""
                         UPDATE Lote 
                         SET Cantidad_Unitario = Cantidad_Unitario - ?
                         WHERE id = ?
                     """, (cantidad_a_usar, lote_id))
                     
-                    # Crear detalle de venta
                     cursor.execute("""
                         INSERT INTO DetallesVentas 
                         (Id_Venta, Id_Lote, Cantidad_Unitario, Precio_Unitario)
@@ -1340,25 +739,27 @@ class VentaRepository(BaseRepository):
                     cantidad_restante -= cantidad_a_usar
                 
                 if cantidad_restante > 0:
-                    raise StockInsuficienteError(item['codigo'], 
-                                            item['cantidad'] - cantidad_restante, 
-                                            item['cantidad'])
+                    raise StockInsuficienteError(
+                        item['codigo'], 
+                        item['cantidad'] - cantidad_restante, 
+                        item['cantidad']
+                    )
             
-            # PASO 5: Actualizar total de la venta
-            cursor.execute("UPDATE Ventas SET Total = ? WHERE id = ?", 
-                        (total_nueva_venta, venta_id))
+            # Actualizar total
+            cursor.execute(
+                "UPDATE Ventas SET Total = ? WHERE id = ?", 
+                (total_nueva_venta, venta_id)
+            )
             
-            # PASO 6: Commit
             conn.commit()
             
-            # Limpiar cache
             self._invalidate_cache_after_modification()
             
             print(f"🎉 Venta {venta_id} actualizada exitosamente")
             return True
             
         except Exception as e:
-            print(f"❌ Error actualizando venta {venta_id}: {e}")
+            print(f"❌ Error actualizando venta: {e}")
             if conn:
                 conn.rollback()
             raise VentaError(f"Error actualizando venta: {str(e)}")
@@ -1366,41 +767,132 @@ class VentaRepository(BaseRepository):
         finally:
             if conn:
                 conn.close()
-    def verificar_disponibilidad_producto_sin_cache(self, codigo: str) -> Dict[str, Any]:
-        """
-        NUEVO: Verifica disponibilidad SIN usar cache - para operaciones críticas
-        """
-        if not codigo:
-            return {"cantidad_disponible": 0, "disponible": False}
+
+    @ExceptionHandler.handle_exception
+    def eliminar_venta(self, venta_id: int) -> bool:
+        """Elimina venta y RESTAURA stock a lotes"""
+        validate_required(venta_id, "venta_id")
+        
+        conn = None
         
         try:
-            query = """
-            SELECT 
-                p.id,
-                p.Codigo,
-                p.Nombre,
-                p.Stock_Unitario as Stock_Disponible
-            FROM Productos p
-            WHERE p.Codigo = ?
-            """
+            conn = self._get_connection()
+            cursor = conn.cursor()
             
-            # ✅ FORZAR consulta directa sin cache
-            resultado = self._execute_query(query, (codigo.strip(),), fetch_one=True, use_cache=False)
+            print(f"🗑️ Eliminando venta {venta_id}")
             
-            if resultado:
-                stock_disponible = resultado['Stock_Disponible'] or 0
-                return {
-                    "cantidad_disponible": stock_disponible,
-                    "disponible": stock_disponible > 0,
-                    "producto_id": resultado['id'],
-                    "nombre": resultado['Nombre']
-                }
-            else:
-                return {"cantidad_disponible": 0, "disponible": False}
-                
+            # Obtener detalles para restaurar
+            detalles_venta = self.get_detalles_venta_para_restauracion(venta_id)
+            if not detalles_venta:
+                raise VentaError(f"Venta {venta_id} no encontrada")
+            
+            # Restaurar stock a lotes
+            for detalle in detalles_venta:
+                cursor.execute("""
+                    UPDATE Lote 
+                    SET Cantidad_Unitario = Cantidad_Unitario + ?
+                    WHERE id = ?
+                """, (detalle['Cantidad_Unitario'], detalle['Id_Lote']))
+            
+            print(f"✅ Stock restaurado a {len(detalles_venta)} lotes")
+            
+            # Eliminar detalles
+            cursor.execute("DELETE FROM DetallesVentas WHERE Id_Venta = ?", (venta_id,))
+            
+            # Eliminar venta
+            cursor.execute("DELETE FROM Ventas WHERE id = ?", (venta_id,))
+            
+            if cursor.rowcount == 0:
+                raise VentaError(f"Venta {venta_id} no encontrada")
+            
+            conn.commit()
+            
+            self._invalidate_cache_after_modification()
+            
+            print(f"🎉 Venta {venta_id} eliminada - Stock restaurado")
+            return True
+            
         except Exception as e:
-            print(f"❌ Error verificando disponibilidad sin cache para {codigo}: {e}")
-            return {"cantidad_disponible": 0, "disponible": False}
+            print(f"❌ Error eliminando venta: {e}")
+            
+            if conn:
+                conn.rollback()
+            
+            raise VentaError(f"Error eliminando venta: {str(e)}")
+        
+        finally:
+            if conn:
+                conn.close()
+
+    def get_detalles_venta_para_restauracion(self, venta_id: int) -> List[Dict[str, Any]]:
+        """Obtiene detalles de venta para restauración"""
+        query = """
+        SELECT 
+            dv.Id_Lote,
+            dv.Cantidad_Unitario,
+            dv.Precio_Unitario,
+            (dv.Cantidad_Unitario * dv.Precio_Unitario) as Subtotal,
+            l.Id_Producto,
+            p.Codigo as Producto_Codigo,
+            p.Nombre as Producto_Nombre
+        FROM DetallesVentas dv
+        INNER JOIN Lote l ON dv.Id_Lote = l.id
+        INNER JOIN Productos p ON l.Id_Producto = p.id
+        WHERE dv.Id_Venta = ?
+        ORDER BY dv.id
+        """
+        
+        try:
+            detalles = self._execute_query(query, (venta_id,)) or []
+            print(f"📋 Detalles obtenidos para restauración: {len(detalles)} registros")
+            return detalles
+        except Exception as e:
+            print(f"❌ Error obteniendo detalles: {e}")
+            return []
+
+    # ===== MÉTODOS DE INVALIDACIÓN DE CACHE =====
+    
+    def _invalidate_cache_after_modification(self):
+        """Invalidación completa de cache"""
+        try:
+            print("🧹 INVALIDACIÓN COMPLETA DE CACHE...")
+            
+            caches_to_clear = [
+                '_cache', '_query_cache', '_result_cache', '_data_cache', 
+                '_product_cache', '_stock_cache', '_search_cache'
+            ]
+            
+            for cache_name in caches_to_clear:
+                if hasattr(self, cache_name):
+                    cache_obj = getattr(self, cache_name)
+                    if hasattr(cache_obj, 'clear'):
+                        cache_obj.clear()
+            
+            # Resetear timestamps
+            timestamp_attrs = [
+                '_last_cache_time', '_cache_timestamp', '_last_update',
+                '_last_product_cache', '_last_stock_update'
+            ]
+            
+            for attr_name in timestamp_attrs:
+                if hasattr(self, attr_name):
+                    setattr(self, attr_name, None)
+            
+            # Forzar recarga
+            self._force_reload = True
+            self._force_reload_productos = True
+            self._bypass_all_cache = True
+            
+            # Invalidar ProductoRepository
+            if hasattr(self, 'producto_repo') and self.producto_repo:
+                if hasattr(self.producto_repo, '_invalidate_cache_after_modification'):
+                    self.producto_repo._invalidate_cache_after_modification()
+            
+        except Exception as e:
+            print(f"⚠️ Error en invalidación: {e}")
+
+    # ===== MÉTODOS DE REPORTES (sin cambios necesarios) =====
+    
     def get_ventas_del_dia(self, fecha: str = None) -> Dict[str, Any]:
         """Obtiene resumen de ventas del día"""
         if not fecha:
@@ -1422,7 +914,6 @@ class VentaRepository(BaseRepository):
         
         resumen = self._execute_query(query, (fecha,), fetch_one=True, use_cache=False)
         
-        # Obtener ventas detalladas del día
         ventas_query = """
         SELECT v.*, u.Nombre + ' ' + u.Apellido_Paterno as Vendedor
         FROM Ventas v
@@ -1438,374 +929,3 @@ class VentaRepository(BaseRepository):
             'resumen': resumen,
             'ventas': ventas
         }
-    
-    def get_top_productos_vendidos(self, dias: int = 30, limit: int = 10) -> List[Dict[str, Any]]:
-        """Top productos más vendidos en período"""
-        query = f"""
-        SELECT TOP {limit}
-            p.Codigo,
-            p.Nombre as Producto_Nombre,
-            m.Nombre as Marca_Nombre,
-            SUM(dv.Cantidad_Unitario) as Cantidad_Vendida,
-            COUNT(DISTINCT v.id) as Num_Ventas,
-            SUM(dv.Cantidad_Unitario * dv.Precio_Unitario) as Ingresos_Total,
-            AVG(dv.Precio_Unitario) as Precio_Promedio
-        FROM Ventas v
-        INNER JOIN DetallesVentas dv ON v.id = dv.Id_Venta
-        INNER JOIN Lote l ON dv.Id_Lote = l.id
-        INNER JOIN Productos p ON l.Id_Producto = p.id
-        INNER JOIN Marca m ON p.ID_Marca = m.id
-        WHERE v.Fecha >= DATEADD(DAY, -?, GETDATE())
-        GROUP BY p.id, p.Codigo, p.Nombre, m.Nombre
-        ORDER BY Cantidad_Vendida DESC
-        """
-        return self._execute_query(query, (dias,), use_cache=False)
-    
-    def get_ventas_por_vendedor(self, fecha_desde: str = None, fecha_hasta: str = None) -> List[Dict[str, Any]]:
-        """Estadísticas de ventas por vendedor"""
-        where_clause = ""
-        params = []
-        
-        if fecha_desde and fecha_hasta:
-            where_clause = "WHERE v.Fecha BETWEEN ? AND ?"
-            params = [fecha_desde, fecha_hasta]
-        
-        query = f"""
-        SELECT 
-            u.id as Usuario_ID,
-            u.Nombre + ' ' + u.Apellido_Paterno as Vendedor,
-            COUNT(v.id) as Total_Ventas,
-            SUM(v.Total) as Ingresos_Total,
-            AVG(v.Total) as Ticket_Promedio,
-            MAX(v.Total) as Venta_Mayor,
-            MIN(v.Total) as Venta_Menor
-        FROM Usuario u
-        LEFT JOIN Ventas v ON u.id = v.Id_Usuario
-        {where_clause}
-        GROUP BY u.id, u.Nombre, u.Apellido_Paterno
-        HAVING COUNT(v.id) > 0
-        ORDER BY Ingresos_Total DESC
-        """
-        return self._execute_query(query, tuple(params), use_cache=False)
-    
-    def get_reporte_ingresos(self, periodo: int = 30) -> Dict[str, Any]:
-        """Reporte de ingresos por período"""
-        # Ingresos totales
-        ingresos_query = """
-        SELECT 
-            SUM(Total) as Ingresos_Total,
-            COUNT(*) as Total_Ventas,
-            AVG(Total) as Ticket_Promedio
-        FROM Ventas 
-        WHERE Fecha >= DATEADD(DAY, -?, GETDATE())
-        """
-        
-        ingresos = self._execute_query(ingresos_query, (periodo,), fetch_one=True, use_cache=False)
-        
-        # Ingresos por día
-        ingresos_diarios_query = """
-        SELECT 
-            CAST(Fecha AS DATE) as Fecha,
-            SUM(Total) as Ingresos_Dia,
-            COUNT(*) as Ventas_Dia
-        FROM Ventas 
-        WHERE Fecha >= DATEADD(DAY, -?, GETDATE())
-        GROUP BY CAST(Fecha AS DATE)
-        ORDER BY Fecha DESC
-        """
-        
-        ingresos_diarios = self._execute_query(ingresos_diarios_query, (periodo,), use_cache=False)
-        
-        return {
-            'periodo_dias': periodo,
-            'resumen': ingresos,
-            'por_dia': ingresos_diarios
-        }
-    
-    def verificar_integridad_venta(self, venta_id: int) -> Dict[str, Any]:
-        """Verifica la integridad de una venta"""
-        venta = self.get_venta_completa(venta_id)
-        
-        if not venta:
-            return {'valida': False, 'errores': ['Venta no encontrada']}
-        
-        errores = []
-        
-        # Verificar que el total coincide con la suma de detalles
-        total_calculado = sum(
-            detalle['Cantidad_Unitario'] * detalle['Precio_Unitario'] 
-            for detalle in venta['detalles']
-        )
-        
-        if abs(total_calculado - venta['Total']) > 0.01:
-            errores.append(f"Total inconsistente: DB={venta['Total']}, Calculado={total_calculado}")
-        
-        # Verificar que todos los lotes existen
-        for detalle in venta['detalles']:
-            lote_query = "SELECT id FROM Lote WHERE id = ?"
-            lote = self._execute_query(lote_query, (detalle['Id_Lote'],), fetch_one=True, use_cache=False)
-            if not lote:
-                errores.append(f"Lote {detalle['Id_Lote']} no existe")
-        
-        return {
-            'valida': len(errores) == 0,
-            'errores': errores,
-            'total_db': venta['Total'],
-            'total_calculado': total_calculado
-        }
-    # ===============================
-    # 🚀 SISTEMA FIFO 2.0 - MÉTODOS NUEVOS
-    # Usan procedimientos almacenados de SQL Server
-    # ===============================
-    
-    def registrar_venta_fifo(self, usuario_id: int, detalles: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """
-        🚀 FIFO 2.0: Registra venta usando procedimiento almacenado sp_Vender_Producto_FIFO
-        
-        Args:
-            usuario_id: ID del usuario que realiza la venta
-            detalles: Lista de diccionarios con:
-                [
-                    {
-                        "Id_Producto": 1,
-                        "Cantidad": 3,
-                        "Precio_Venta": 35.00
-                    },
-                    ...
-                ]
-        
-        Returns:
-            Dict con id_venta, total y mensaje de confirmación
-        """
-        try:
-            validate_required(usuario_id, "usuario_id")
-            validate_required(detalles, "detalles")
-            
-            if not detalles:
-                raise VentaError("No se proporcionaron items para la venta")
-            
-            import json
-            detalles_json = json.dumps(detalles)
-            
-            print(f"💰 Registrando venta con FIFO automático - Usuario: {usuario_id}, Items: {len(detalles)}")
-            print(f"📋 Detalles JSON: {detalles_json}")
-            
-            # Ejecutar procedimiento almacenado
-            query = """
-            DECLARE @IdVenta INT, @Total DECIMAL(12,2);
-            
-            EXEC sp_Vender_Producto_FIFO 
-                @Id_Usuario = ?,
-                @Detalles = ?,
-                @Id_Venta = @IdVenta OUTPUT,
-                @Total_Venta = @Total OUTPUT;
-            
-            SELECT @IdVenta as IdVenta, @Total as Total;
-            """
-            
-            # Ejecutar con use_cache=False
-            result = self._execute_query(
-                query,
-                (usuario_id, detalles_json),
-                fetch_one=True,
-                use_cache=False
-            )
-            
-            if result and result.get('IdVenta'):
-                id_venta = result['IdVenta']
-                total = float(result['Total'])
-                
-                # Invalidar cachés completamente
-                self._invalidate_cache_after_modification()
-                self.invalidate_all_caches()
-                
-                # Invalidar también cachés de productos
-                if hasattr(self, 'producto_repo'):
-                    self.producto_repo.invalidate_all_caches()
-                
-                print(f"✅ Venta registrada exitosamente - ID: {id_venta}, Total: ${total:.2f}")
-                print(f"   FIFO aplicado automáticamente por el SP")
-                
-                return {
-                    "id_venta": id_venta,
-                    "total": total,
-                    "mensaje": f"Venta {id_venta} procesada con sistema FIFO automático",
-                    "sistema": "FIFO 2.0"
-                }
-            else:
-                raise VentaError("El procedimiento almacenado no retornó ID de venta")
-                
-        except Exception as e:
-            error_msg = str(e)
-            print(f"❌ Error en venta FIFO: {error_msg}")
-            
-            # Manejo específico de errores
-            if "Stock insuficiente" in error_msg:
-                # Extraer información del error
-                raise StockInsuficienteError(
-                    codigo_producto="Ver mensaje",
-                    stock_disponible=0,
-                    cantidad_solicitada=0
-                )
-            elif "Error en el procesamiento FIFO" in error_msg:
-                raise VentaError(f"Error en procesamiento FIFO: {error_msg}")
-            
-            # Fallback a método antiguo si está configurado
-            from .config_fifo import config_fifo
-            if config_fifo.AUTO_FALLBACK_TO_LEGACY:
-                print("🔙 Intentando con método legacy...")
-                try:
-                    # Convertir formato de detalles para método antiguo
-                    items_legacy = []
-                    for item in detalles:
-                        codigo = self._get_codigo_producto(item['Id_Producto'])
-                        items_legacy.append({
-                            'codigo': codigo,
-                            'cantidad': item['Cantidad'],
-                            'precio_venta': item['Precio_Venta']
-                        })
-                    
-                    # Aquí llamarías al método antiguo de crear venta
-                    # return self.crear_venta_legacy(usuario_id, items_legacy)
-                    print("⚠️  Método legacy no implementado en este ejemplo")
-                    
-                except Exception as fallback_error:
-                    print(f"❌ Fallback también falló: {fallback_error}")
-            
-            raise VentaError(f"Error registrando venta FIFO: {error_msg}")
-    
-    def obtener_margen_venta(self, venta_id: int) -> List[Dict[str, Any]]:
-        """
-        🚀 FIFO 2.0: Obtiene márgenes detallados de una venta usando sp_Obtener_Margen_Venta
-        
-        Args:
-            venta_id: ID de la venta
-        
-        Returns:
-            Lista con detalles de márgenes por producto
-        """
-        try:
-            validate_required(venta_id, "venta_id")
-            
-            print(f"💰 Obteniendo márgenes de venta ID: {venta_id}")
-            
-            query = "EXEC sp_Obtener_Margen_Venta @Id_Venta = ?"
-            
-            margenes = self._execute_query(query, (venta_id,), use_cache=False)
-            
-            if margenes:
-                # Calcular totales
-                total_margen = sum(m.get('Margen_Total', 0) or 0 for m in margenes)
-                total_venta = sum(m.get('Total_Venta', 0) or 0 for m in margenes)
-                total_costo = sum(m.get('Costo_Total', 0) or 0 for m in margenes)
-                
-                print(f"📊 Márgenes de venta {venta_id}:")
-                print(f"   - Total venta: ${total_venta:.2f}")
-                print(f"   - Costo total: ${total_costo:.2f}")
-                print(f"   - Margen total: ${total_margen:.2f}")
-                if total_costo > 0:
-                    print(f"   - % Margen: {(total_margen/total_costo*100):.2f}%")
-            else:
-                print(f"⚠️  No se encontraron márgenes para venta {venta_id}")
-            
-            return margenes
-            
-        except Exception as e:
-            print(f"❌ Error obteniendo márgenes de venta: {e}")
-            return []
-    
-    def obtener_reporte_margenes_periodo(self, fecha_desde: str, fecha_hasta: str) -> Dict[str, Any]:
-        """
-        🚀 FIFO 2.0: Obtiene reporte consolidado de márgenes en un periodo
-        
-        Args:
-            fecha_desde: Fecha inicial (formato: 'YYYY-MM-DD')
-            fecha_hasta: Fecha final (formato: 'YYYY-MM-DD')
-        
-        Returns:
-            Dict con reporte consolidado de márgenes
-        """
-        try:
-            # Obtener ventas del periodo
-            query_ventas = """
-            SELECT id FROM Ventas
-            WHERE Fecha BETWEEN ? AND ?
-            ORDER BY Fecha
-            """
-            
-            ventas = self._execute_query(
-                query_ventas,
-                (fecha_desde, fecha_hasta),
-                use_cache=False
-            )
-            
-            if not ventas:
-                return {
-                    "total_ventas": 0,
-                    "total_vendido": 0.0,
-                    "total_costo": 0.0,
-                    "margen_total": 0.0,
-                    "porcentaje_margen": 0.0,
-                    "detalles_por_venta": []
-                }
-            
-            print(f"📊 Calculando márgenes para {len(ventas)} ventas del periodo...")
-            
-            detalles_ventas = []
-            total_vendido = 0.0
-            total_costo = 0.0
-            
-            for venta in ventas:
-                margenes = self.obtener_margen_venta(venta['id'])
-                if margenes:
-                    margen_venta = sum(m.get('Margen_Total', 0) or 0 for m in margenes)
-                    venta_total = sum(m.get('Total_Venta', 0) or 0 for m in margenes)
-                    costo_total = sum(m.get('Costo_Total', 0) or 0 for m in margenes)
-                    
-                    total_vendido += venta_total
-                    total_costo += costo_total
-                    
-                    detalles_ventas.append({
-                        "id_venta": venta['id'],
-                        "total_venta": venta_total,
-                        "costo_total": costo_total,
-                        "margen": margen_venta,
-                        "porcentaje_margen": (margen_venta/costo_total*100) if costo_total > 0 else 0
-                    })
-            
-            margen_total = total_vendido - total_costo
-            porcentaje_margen = (margen_total/total_costo*100) if total_costo > 0 else 0
-            
-            reporte = {
-                "periodo": f"{fecha_desde} a {fecha_hasta}",
-                "total_ventas": len(ventas),
-                "total_vendido": total_vendido,
-                "total_costo": total_costo,
-                "margen_total": margen_total,
-                "porcentaje_margen": porcentaje_margen,
-                "detalles_por_venta": detalles_ventas
-            }
-            
-            print(f"✅ Reporte de márgenes generado:")
-            print(f"   - Ventas: {len(ventas)}")
-            print(f"   - Total vendido: ${total_vendido:.2f}")
-            print(f"   - Margen: ${margen_total:.2f} ({porcentaje_margen:.2f}%)")
-            
-            return reporte
-            
-        except Exception as e:
-            print(f"❌ Error generando reporte de márgenes: {e}")
-            return {}
-    
-    def _get_codigo_producto(self, producto_id: int) -> str:
-        """Helper para obtener código de producto por ID"""
-        try:
-            result = self._execute_query(
-                "SELECT Codigo FROM Productos WHERE id = ?",
-                (producto_id,),
-                fetch_one=True,
-                use_cache=False
-            )
-            return result['Codigo'] if result else str(producto_id)
-        except:
-            return str(producto_id)

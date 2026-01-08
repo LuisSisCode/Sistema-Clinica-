@@ -1131,22 +1131,23 @@ class ProductoRepository(BaseRepository):
             if not isinstance(lotes, list):
                 return []
             
+            # ✅ CORRECCIÓN: Convertir fechas a strings ISO (igual que en get_lotes_producto_completo_fifo)
             for lote in lotes:
+                # Convertir Fecha_Vencimiento
                 if lote.get('Fecha_Vencimiento'):
-                    try:
-                        fecha = lote['Fecha_Vencimiento']
-                        if hasattr(fecha, 'strftime'):
-                            lote['Fecha_Vencimiento'] = fecha.strftime('%Y-%m-%d')
-                    except:
-                        lote['Fecha_Vencimiento'] = ""
+                    fecha = lote['Fecha_Vencimiento']
+                    if hasattr(fecha, 'isoformat'):
+                        lote['Fecha_Vencimiento'] = fecha.isoformat()  # "2027-05-07"
+                    elif hasattr(fecha, 'strftime'):
+                        lote['Fecha_Vencimiento'] = fecha.strftime('%Y-%m-%d')
                 
+                # Convertir Fecha_Compra
                 if lote.get('Fecha_Compra'):
-                    try:
-                        fecha = lote['Fecha_Compra']
-                        if hasattr(fecha, 'strftime'):
-                            lote['Fecha_Compra'] = fecha.strftime('%Y-%m-%d')
-                    except:
-                        lote['Fecha_Compra'] = ""
+                    fecha = lote['Fecha_Compra']
+                    if hasattr(fecha, 'isoformat'):
+                        lote['Fecha_Compra'] = fecha.isoformat()  # "2026-01-07"
+                    elif hasattr(fecha, 'strftime'):
+                        lote['Fecha_Compra'] = fecha.strftime('%Y-%m-%d')
             
             return lotes if lotes else []
             
@@ -1203,9 +1204,12 @@ class ProductoRepository(BaseRepository):
         
     def get_producto_para_edicion(self, producto_id: int) -> Optional[Dict[str, Any]]:
         """
-        🎯 Obtiene todos los datos necesarios para editar un producto
+        🎯 NUEVO: Obtiene TODOS los datos necesarios para editar un producto
+        Incluye: stock mínimo, ID marca, número de lotes, stock total, etc.
         """
         try:
+            print(f"🔍 Obteniendo producto para edición - ID: {producto_id}")
+            
             query = """
             SELECT 
                 p.id,
@@ -1215,34 +1219,59 @@ class ProductoRepository(BaseRepository):
                 p.Precio_compra,
                 p.Precio_venta,
                 p.Unidad_Medida,
-                p.Stock_Minimo,
-                p.ID_Marca,
+                p.Stock_Minimo,          -- ✅ CRÍTICO: Para mostrar en formulario
+                p.ID_Marca,              -- ✅ CRÍTICO: Para seleccionar en combo
                 m.Nombre as Marca_Nombre,
                 m.Detalles as Marca_Detalles,
-                ISNULL((SELECT SUM(l.Cantidad_Unitario) FROM Lote l WHERE l.Id_Producto = p.id), 0) as Stock_Total,
+                p.Activo,
+                -- Stock calculado desde lotes
+                ISNULL((SELECT SUM(l.Cantidad_Unitario) 
+                        FROM Lote l 
+                        WHERE l.Id_Producto = p.id), 0) as Stock_Total,
+                -- Conteo de lotes
                 (SELECT COUNT(*) FROM Lote l WHERE l.Id_Producto = p.id) as Lotes_Totales,
-                (SELECT COUNT(*) FROM Lote l WHERE l.Id_Producto = p.id AND l.Cantidad_Unitario > 0) as Lotes_Activos
+                (SELECT COUNT(*) FROM Lote l 
+                WHERE l.Id_Producto = p.id AND l.Cantidad_Unitario > 0) as Lotes_Activos,
+                -- Información de vencimiento
+                (SELECT MIN(l.Fecha_Vencimiento) 
+                FROM Lote l 
+                WHERE l.Id_Producto = p.id AND l.Cantidad_Unitario > 0) as Proximo_Vencimiento
             FROM Productos p
             INNER JOIN Marca m ON p.ID_Marca = m.id
             WHERE p.id = ?
             """
             
-            producto = self._execute_query(query, (producto_id,), fetch_one=True)
+            producto = self._execute_query(query, (producto_id,), fetch_one=True, use_cache=False)
             
-            if producto:
-                # Convertir a los nombres que espera QML
-                producto['stockUnitario'] = producto.get('Stock_Total', 0)
-                producto['stockTotal'] = producto.get('Stock_Total', 0)
-                producto['lotesTotales'] = producto.get('Lotes_Totales', 0)
-                producto['lotesActivos'] = producto.get('Lotes_Activos', 0)
-                
-                print(f"✅ Producto para edición: {producto.get('Codigo')}")
-                print(f"   - Stock mínimo: {producto.get('Stock_Minimo')}")
-                print(f"   - ID Marca: {producto.get('ID_Marca')}")
-                print(f"   - Lotes totales: {producto.get('Lotes_Totales')}")
+            if not producto:
+                print(f"❌ Producto ID {producto_id} no encontrado para edición")
+                return None
+            
+            # ✅ ENRIQUECER DATOS PARA QML
+            producto['stock'] = producto.get('Stock_Total', 0)
+            producto['stockUnitario'] = producto.get('Stock_Total', 0)
+            producto['stockTotal'] = producto.get('Stock_Total', 0)
+            producto['stock_minimo'] = producto.get('Stock_Minimo', 10)
+            producto['lotesTotales'] = producto.get('Lotes_Totales', 0)
+            producto['lotesActivos'] = producto.get('Lotes_Activos', 0)
+            producto['marca_nombre'] = producto.get('Marca_Nombre', '')
+            
+            # ✅ DEBUG: Mostrar datos obtenidos
+            print(f"✅ Producto obtenido para edición: {producto.get('Codigo')}")
+            print(f"   - Nombre: {producto.get('Nombre')}")
+            print(f"   - Stock mínimo: {producto.get('Stock_Minimo')}")
+            print(f"   - ID Marca: {producto.get('ID_Marca')}")
+            print(f"   - Marca: {producto.get('Marca_Nombre')}")
+            print(f"   - Stock total: {producto.get('Stock_Total')}")
+            print(f"   - Lotes totales: {producto.get('Lotes_Totales')}")
+            print(f"   - Lotes activos: {producto.get('Lotes_Activos')}")
+            print(f"   - Precio compra: {producto.get('Precio_compra')}")
+            print(f"   - Precio venta: {producto.get('Precio_venta')}")
             
             return producto
             
         except Exception as e:
             print(f"❌ Error obteniendo producto para edición {producto_id}: {e}")
+            import traceback
+            traceback.print_exc()
             return None
