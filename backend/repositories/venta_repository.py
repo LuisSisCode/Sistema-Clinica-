@@ -929,3 +929,53 @@ class VentaRepository(BaseRepository):
             'resumen': resumen,
             'ventas': ventas
         }
+    
+    def get_ventas_by_date_range(self, fecha_inicio: datetime, fecha_fin: datetime) -> List[Dict[str, Any]]:
+        """
+        Obtiene todas las ventas en un rango de fechas
+        Compatible con dashboard_model.py
+        
+        Args:
+            fecha_inicio: Fecha y hora de inicio del rango (inclusive)
+            fecha_fin: Fecha y hora de fin del rango (exclusivo)
+        
+        Returns:
+            Lista de ventas con sus totales y vendedor
+        """
+        try:
+            # Convertir datetime a strings para SQL
+            fecha_inicio_str = fecha_inicio.strftime('%Y-%m-%d %H:%M:%S')
+            fecha_fin_str = fecha_fin.strftime('%Y-%m-%d %H:%M:%S')
+            
+            print(f"🔍 VentaRepository - Buscando ventas entre {fecha_inicio_str} y {fecha_fin_str}")
+            
+            query = """
+            SELECT 
+                v.id,
+                v.Fecha,
+                v.Total,
+                v.Id_Usuario,
+                u.Nombre + ' ' + u.Apellido_Paterno as Vendedor,
+                -- Compatibilidad con múltiples nombres de campo
+                v.Total as Venta_Total
+            FROM Ventas v
+            INNER JOIN Usuario u ON v.Id_Usuario = u.id
+            WHERE v.Fecha >= ? AND v.Fecha < ?
+            ORDER BY v.Fecha DESC
+            """
+            
+            # Ejecutar sin caché para datos frescos
+            ventas = self._execute_query(query, (fecha_inicio_str, fecha_fin_str), use_cache=False) or []
+            
+            print(f"💰 VentaRepository - {len(ventas)} ventas encontradas en el rango")
+            
+            # Log de debug: mostrar total sumado
+            if ventas:
+                total_sum = sum(float(v.get('Total', 0)) for v in ventas)
+                print(f"   💵 Total sumado: Bs {total_sum:.2f}")
+            
+            return ventas
+            
+        except Exception as e:
+            print(f"❌ Error obteniendo ventas por rango: {e}")
+            return []

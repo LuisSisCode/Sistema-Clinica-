@@ -7,6 +7,10 @@ import Qt.labs.platform 1.1
 Item {
     id: cierreCajaRoot
     objectName: "cierreCajaRoot"
+
+    // Agregar después de las propiedades existentes
+    property bool modelReady: cierreCajaModel !== null
+    property bool pageVisible: visible
     
     Component.onDestruction: {
         console.log("🨨🨨🨨 CIERRE DE CAJA SIENDO DESTRUIDO 🨨🨨🨨")
@@ -87,6 +91,10 @@ Item {
 
     // ✅ Función para sincronizar propiedades MANUALMENTE (menos reactivo)
     function sincronizarConModelo() {
+        if (!modelReady || !pageVisible) {
+            console.log("⚠️ Modelo no disponible o página oculta, omitiendo sincronización")
+            return
+        }
         if (!cierreCajaModel) return
         
         try {
@@ -698,12 +706,16 @@ Item {
                                             }
                                             
                                             onTextChanged: {
-                                                if (cierreCajaModel && text.trim().length > 0) {
-                                                    try {
-                                                        cierreCajaModel.establecerHoraInicio(text)
-                                                    } catch (error) {
-                                                        console.log("Error actualizando hora inicio:", error)
-                                                    }
+                                                if (!modelReady || !pageVisible || text.length < 4) {
+                                                    return
+                                                }
+                                                
+                                                let horaFormateada = limpiarFormatoHora(text)
+                                                try {
+                                                    cierreCajaModel.establecerHoraInicio(horaFormateada)
+                                                    console.log("⏰ Hora inicio actualizada:", horaFormateada)
+                                                } catch (error) {
+                                                    console.log("❌ Error estableciendo hora inicio:", error)
                                                 }
                                             }
                                         }
@@ -737,12 +749,14 @@ Item {
                                             }
                                             
                                             onTextChanged: {
-                                                if (cierreCajaModel && text.trim().length > 0) {
-                                                    try {
-                                                        cierreCajaModel.establecerHoraFin(text)
-                                                    } catch (error) {
-                                                        console.log("Error actualizando hora fin:", error)
-                                                    }
+                                                // Solo ejecutar si el componente está visible Y el modelo existe
+                                                if (!visible || !modelReady) {
+                                                    return
+                                                }
+                                                
+                                                if (text.length > 0 && cierreCajaModel && typeof cierreCajaModel.establecerHoraFin === 'function') {
+                                                    console.log("🕐 Hora fin:", text)
+                                                    cierreCajaModel.establecerHoraFin(text)
                                                 }
                                             }
                                         }
@@ -1996,7 +2010,7 @@ Item {
                                                                     
                                                                     // ✅ LLAMAR AL MÉTODO CORRECTO DEL MODELO
                                                                     if (typeof cierreCajaModel.generarPDFCierreEspecifico === 'function') {
-                                                                        cierreCajaModel.generarPDFCierreEspecifico(
+                                                                        generarPDFCierreEspecifico(
                                                                             formatearFechaParaModel(modelData.Fecha),
                                                                             limpiarFormatoHora(modelData.HoraInicio),
                                                                             limpiarFormatoHora(modelData.HoraFin)
@@ -2410,7 +2424,7 @@ Item {
     }
     
     function generarPDFCierreEspecifico(fecha, horaInicio, horaFin) {
-        console.log("📄 Generando PDF de cierre específico")
+        console.log("📄 Solicitando PDF de cierre específico")
         
         // ✅ VALIDACIONES DE ENTRADA
         if (!fecha || !horaInicio || !horaFin) {
@@ -2465,15 +2479,49 @@ Item {
             console.log("   Hora inicio:", horaInicioLimpia)
             console.log("   Hora fin:", horaFinLimpia)
             
-            // ✅ Llamar al método del model CON VALIDACIÓN
+            // ✅ CORRECCIÓN CRÍTICA: Verificar si ya existe PDF
+            if (typeof cierreCajaModel.obtenerFilepathPDF === 'function') {
+                console.log("🔍 Verificando si ya existe PDF generado...")
+                
+                let filepath = cierreCajaModel.obtenerFilepathPDF(
+                    fechaLimpia, 
+                    horaInicioLimpia, 
+                    horaFinLimpia
+                )
+                
+                console.log("📄 Filepath obtenido de BD:", filepath)
+                
+                // ✅ SI EXISTE Y NO ESTÁ VACÍO
+                if (filepath && filepath !== "" && filepath !== "null" && filepath !== "undefined") {
+                    console.log("✅ PDF encontrado en caché:", filepath)
+                    
+                    // ✅ Verificar que el archivo físicamente existe
+                    if (Qt.platform.os === "windows" || Qt.platform.os === "linux" || Qt.platform.os === "osx") {
+                        console.log("✅ Abriendo PDF existente desde caché")
+                        mostrarNotificacion("📄 PDF Existente", "Abriendo PDF previamente generado...")
+                        
+                        // Abrir el PDF directamente SIN regenerar
+                        abrirPDFAutomaticamente(filepath)
+                        return  // ✅ SALIR AQUÍ - No continuar con generación
+                    }
+                } else {
+                    console.log("⚠️ No hay PDF en caché, generando nuevo...")
+                    console.log("   Filepath recibido:", filepath, "(tipo:", typeof filepath, ")")
+                }
+            } else {
+                console.log("⚠️ Método obtenerFilepathPDF no disponible")
+            }
+            
+            // ✅ Si llegamos aquí, necesitamos generar nuevo PDF
+            console.log("🔄 Generando nuevo PDF...")
+            mostrarNotificacion("🔄 Generando", "Creando nuevo PDF del cierre...")
+            
             if (typeof cierreCajaModel.generarPDFCierreEspecifico === 'function') {
                 cierreCajaModel.generarPDFCierreEspecifico(
                     fechaLimpia, 
                     horaInicioLimpia, 
                     horaFinLimpia
                 )
-                
-                mostrarNotificacion("Procesando", "Generando PDF del cierre...")
             } else {
                 console.log("❌ Método generarPDFCierreEspecifico no existe en el modelo")
                 mostrarNotificacion("Error", "Función no disponible en el modelo")

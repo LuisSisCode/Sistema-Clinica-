@@ -426,7 +426,7 @@ ScrollView {
             cargarAlertas()
         }
 
-        function onAertasChanged() {
+        function onAlertasChanged() {
             console.log("🔔 Signal alertasChanged del modelo - Actualizando vista")
             if (inventarioModel && inventarioModel.alertas) {
                 alertasInventario = inventarioModel.alertas
@@ -649,11 +649,12 @@ ScrollView {
                                 leftPadding: 12
                             }
                             
-                            onActivated: {
+                            onActivated: function(index) {  // ✅ Declarar 'index' explícitamente
                                 selectedMonth = model[index].value
                                 currentPeriodType = "mes"
                                 
                                 if (dashboardModel) {
+                                    dashboardModel.cambiarPeriodo("mes")
                                     dashboardModel.cambiarFechaEspecifica(selectedMonth, selectedYear)
                                 }
                                 
@@ -666,7 +667,7 @@ ScrollView {
                         Layout.preferredWidth: 40
                         Layout.preferredHeight: 40
                         Layout.alignment: Qt.AlignVCenter
-                        text: "🔄"
+                        text: "-🔄-"
                         
                         background: Rectangle {
                             color: whiteColor
@@ -686,9 +687,11 @@ ScrollView {
                         
                         onClicked: {
                             if (dashboardModel) {
+                                console.log("🔄 Refrescando datos del dashboard...")
                                 dashboardModel.refrescarDatos()
                             }
                             if (inventarioModel) {
+                                console.log("🔄 Refrescando alertas de inventario...")
                                 cargarAlertas()
                             }
                         }

@@ -855,6 +855,39 @@ class CierreCajaModel(QObject):
             
             if success:
                 print(f"✅ PDF generado: {filepath}")
+                
+                # ✅ NUEVO: Guardar filepath en BD
+                guardado_exitoso = self.repository.guardar_filepath_pdf(fecha, hora_inicio, hora_fin, filepath)
+                
+                # ✅ PRUEBA DE VERIFICACIÓN TEMPORAL
+                if guardado_exitoso:
+                    # Intentar recuperar el filepath inmediatamente
+                    filepath_recuperado = self.repository.obtener_filepath_pdf(
+                        fecha, hora_inicio, hora_fin
+                    )
+                    if filepath_recuperado:
+                        print(f"✅ VERIFICACIÓN OK: Filepath recuperado correctamente")
+                        print(f"   Original: {filepath}")
+                        print(f"   Recuperado: {filepath_recuperado}")
+                        
+                        # ✅ VERIFICACIÓN ADICIONAL: Comprobar que los paths coinciden
+                        if filepath == filepath_recuperado:
+                            print(f"✅ COINCIDENCIA EXACTA: Los filepaths son idénticos")
+                        else:
+                            print(f"⚠️ ADVERTENCIA: Los filepaths no coinciden exactamente")
+                            print(f"   Diferencia encontrada en la ruta")
+                    else:
+                        print(f"❌ VERIFICACIÓN FALLÓ: No se pudo recuperar el filepath")
+                        print(f"   El PDF se generó en: {filepath}")
+                        print(f"   Pero no se pudo recuperar de la base de datos")
+                        # No emitimos error para no interrumpir el flujo, solo log
+                else:
+                    print(f"⚠️ PDF generado pero filepath NO se guardó en BD")
+                    print(f"   El PDF existe en: {filepath}")
+                    print(f"   Pero no se registró en la base de datos")
+                    # ✅ OPCIONAL: Emitir advertencia al usuario
+                    self.operacionError.emit("PDF generado pero no se guardó la referencia en BD")
+                
                 self.pdfGenerado.emit(filepath)
                 self.operacionExitosa.emit("PDF generado correctamente")
             else:
@@ -1638,6 +1671,51 @@ class CierreCajaModel(QObject):
             
         except Exception as e:
             print(f"❌ Error limpiando datos: {e}")
+
+    # ===============================
+    # MÉTODOS PARA GESTIÓN DE PDF (CON CACHÉ)
+    # ===============================
+
+    @Slot(str, str, str, result=str)
+    def obtenerFilepathPDF(self, fecha: str, hora_inicio: str, hora_fin: str) -> str:
+        """
+        Obtiene el filepath del PDF guardado para este cierre
+        Verifica que el archivo exista físicamente antes de retornarlo
+        
+        Args:
+            fecha: Fecha en formato DD/MM/YYYY
+            hora_inicio: Hora inicio en formato HH:MM
+            hora_fin: Hora fin en formato HH:MM
+        
+        Returns:
+            str: Filepath si existe y el archivo está presente, string vacío si no
+        """
+        try:
+            print(f"🔍 Buscando PDF guardado - Fecha: {fecha}, Horario: {hora_inicio}-{hora_fin}")
+            
+            # Buscar en BD usando el repository
+            filepath = self.repository.obtener_filepath_pdf(fecha, hora_inicio, hora_fin)
+            
+            if filepath:
+                # Verificar que el archivo exista físicamente
+                if os.path.exists(filepath):
+                    print(f"✅ PDF encontrado en disco: {filepath}")
+                    return filepath
+                else:
+                    print(f"⚠️ PDF registrado en BD pero archivo no existe en disco")
+                    # Limpiar registro inválido
+                    self.repository.limpiar_filepath_pdf(fecha, hora_inicio, hora_fin)
+                    return ""
+            else:
+                print("⚠️ No hay PDF registrado para este cierre")
+                return ""
+                
+        except Exception as e:
+            print(f"❌ Error buscando filepath PDF: {e}")
+            import traceback
+            traceback.print_exc()
+            return ""
+
 # ===============================
 # REGISTRO PARA QML
 # ===============================
