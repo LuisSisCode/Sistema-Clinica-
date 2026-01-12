@@ -370,25 +370,117 @@ Item {
     }
     
     function setProveedorById(proveedorId) {
+        console.log("🎯 setProveedorById llamado con ID:", proveedorId)
+        
         if (!proveedorId || proveedorId <= 0) {
+            console.log("🔄 Reseteando proveedor")
             reset()
             return
         }
         
         cargandoProgramaticamente = true
         
+        // Buscar el proveedor en el array
         for (var i = 0; i < proveedoresModel.length; i++) {
             var prov = proveedoresModel[i]
             if (esProveedorValido(prov) && prov.id === proveedorId) {
+                console.log("✅ Encontrado proveedor:", prov.nombre, "ID:", prov.id)
+                
                 proveedorSeleccionado = String(prov.nombre)
                 proveedorIdSeleccionado = proveedorId
                 searchField.text = String(prov.nombre)
+                
+                // Emitir señal
+                proveedorCambiado(String(prov.nombre), proveedorId)
                 break
             }
         }
         
-        Qt.callLater(function() { cargandoProgramaticamente = false })
+        Qt.callLater(function() { 
+            cargandoProgramaticamente = false 
+            console.log("✅ setProveedorById completado")
+        })
     }
+
+    function cargarPaginaDesdeBD() {
+        if (!gastoModelInstance) {
+            console.log("GastoModel no disponible aún")
+            return
+        }
+        
+        loadingIndicator.visible = true;
+        
+        // Validar y obtener el año correctamente
+        var añoValor = 0;
+        if (filtroAño.currentText && !isNaN(parseInt(filtroAño.currentText))) {
+            añoValor = parseInt(filtroAño.currentText);
+        } else {
+            añoValor = new Date().getFullYear();
+        }
+        
+        // ✅ PROCESAR FILTROS MEJORADOS CON "TODOS LOS PERÍODOS"
+        var filtrosActuales = {
+            tipo_id: filtroTipoServicio.currentIndex > 0 ? 
+                tiposGastosModel.get(filtroTipoServicio.currentIndex - 1).id : 0,
+            mes: 0,  // Por defecto "todos los períodos"
+            año: añoValor
+        };
+        
+        // ✅ NUEVA LÓGICA PARA FILTRO DE MES CON "TODOS LOS PERÍODOS"
+        if (filtroMes.currentIndex === 0) {
+            // "Todos los períodos" - no filtrar por fecha
+            filtrosActuales.mes = 0;
+            filtrosActuales.año = 0;
+        } else {
+            // Mes específico (índice - 1 porque "Todos los períodos" está en posición 0)
+            filtrosActuales.mes = filtroMes.currentIndex;
+            filtrosActuales.año = añoValor;
+        }
+        
+        console.log("Aplicando filtros:", JSON.stringify(filtrosActuales));
+        
+        var offset = currentPageServicios * itemsPerPageServicios;
+        
+        // LLAMADA DIRECTA A LOS MÉTODOS DEL MODEL
+        var gastosPagina = gastoModelInstance.obtenerGastosPaginados(offset, itemsPerPageServicios, filtrosActuales);
+        var totalGastos = gastoModelInstance.obtenerTotalGastos(filtrosActuales);
+        
+        // Limpiar modelo local
+        gastosPaginadosModel.clear();
+        
+        console.log("📊 Gastos recibidos:", gastosPagina.length);
+        
+        // Poblar modelo local con datos del backend
+        for (var i = 0; i < gastosPagina.length; i++) {
+            var gasto = gastosPagina[i];
+            
+            // ✅ DEBUG: Verificar qué datos llegan
+            console.log("Gasto", i, ":", {
+                id: gasto.gastoId || gasto.id,
+                proveedor_nombre: gasto.proveedor_nombre,
+                Proveedor: gasto.Proveedor,
+                proveedor: gasto.proveedor
+            });
+            
+            // ✅ USAR EL CAMPO CORRECTO: 'proveedor' en lugar de 'Proveedor'
+            var nombreProveedor = gasto.proveedor || gasto.Proveedor || gasto.proveedor_nombre || "Sin proveedor";
+            
+            gastosPaginadosModel.append({
+                gastoId: gasto.id || gasto.ID || gasto.gastoId || 0,
+                tipoGasto: gasto.tipo_nombre || gasto.tipoGasto || "Sin tipo",
+                descripcion: gasto.Descripcion || gasto.descripcion || "Sin descripción",
+                monto: parseFloat(gasto.Monto || gasto.monto || 0).toFixed(2),
+                fechaGasto: gasto.Fecha || gasto.fechaGasto || "",
+                proveedor: nombreProveedor,  // ✅ CORREGIDO
+                registradoPor: gasto.usuario_nombre || gasto.registradoPor || "Usuario desconocido"
+            });
+        }
+        
+        totalPagesServicios = Math.ceil(totalGastos / itemsPerPageServicios);
+        loadingIndicator.visible = false;
+        
+        console.log("Página cargada:", gastosPagina.length, "gastos, Total páginas:", totalPagesServicios);
+    }  
     
     function reset() {
         cargandoProgramaticamente = true

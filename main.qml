@@ -741,12 +741,12 @@ ApplicationWindow {
                 visible: currentIndex === 6
                 layer.enabled: true
                 
-                // AGREGAR ESTA PROPIEDAD:
-                property int currentServiciosSubsection: serviciosSubsection
-                onCurrentServiciosSubsectionChanged: {
-                    if (currentServiciosSubsection === 1) {
-                        console.log("🟢 Navegando a subsección de Ingresos Extras")
-                    }
+                // ✅ VINCULAR serviciosSubsection con currentSubsection
+                currentSubsection: serviciosSubsection
+
+                // Log para debug
+                onCurrentSubsectionChanged: {
+                    console.log("🟢 Navegando a subsección:", currentSubsection === 0 ? "Gastos Operativos" : "Ingresos Extras")
                 }
                 
                 // Mantener la señal existente

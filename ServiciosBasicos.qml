@@ -78,9 +78,37 @@ Item {
         "Resources/iconos/egresos.png"
     ]
 
-    property var proveedoresGastosModel: ListModel {}
+    property ListModel proveedoresGastosModel: ListModel {}
     property bool showNewProveedorDialog: false
     property string nuevoProveedorNombre: ""
+
+    readonly property var coloresDisponibles: [
+    "#E74C3C", "#3498DB", "#2ECC71", "#F39C12", "#9B59B6",
+    "#1ABC9C", "#E67E22", "#34495E", "#16A085", "#27AE60",
+    "#2980B9", "#8E44AD", "#C0392B", "#D35400", "#00BCD4",
+    "#4CAF50", "#FF5722", "#673AB7", "#3F51B5", "#009688",
+    "#795548", "#FFC107", "#FF9800", "#F44336", "#E91E63",
+    "#9C27B0", "#673AB7", "#3F51B5", "#2196F3", "#00BCD4",
+    "#009688", "#4CAF50", "#8BC34A", "#CDDC39", "#FFEB3B",
+    "#FFC107", "#FF9800", "#FF5722", "#795548", "#9E9E9E",
+    "#607D8B", "#F48FB1", "#BA68C8", "#7E57C2", "#5C6BC0"
+    ]
+
+    function getColorForTipo(nombreTipo) {
+        if (!nombreTipo) return "#95a5a6"
+        
+        // Buscar el tipo en tiposGastosModel
+        for (var i = 0; i < tiposGastosModel.count; i++) {
+            var tipo = tiposGastosModel.get(i)
+            if (tipo.nombre && tipo.nombre.toLowerCase() === nombreTipo.toLowerCase()) {
+                // Asignar color basado en posición en el modelo
+                var colorIndex = i % coloresDisponibles.length
+                return coloresDisponibles[colorIndex]
+            }
+        }
+        
+        return "#95a5a6"
+    }
 
     // FUNCIÓN HELPER MOVIDA AL NIVEL PRINCIPAL
     function obtenerAñosDisponibles() {
@@ -236,7 +264,6 @@ Item {
         }
     }
     
-    // ✅ FUNCIÓN PARA CARGAR TIPOS DE GASTOS - CORREGIDA
     function loadTiposGastosFromModel() {
         if (!gastoModelInstance) {
             console.log("⚠️ GastoModel no disponible para cargar tipos")
@@ -245,33 +272,63 @@ Item {
         
         console.log("🏷️ Cargando tipos desde modelo...")
         
-        // LIMPIAR COMPLETAMENTE EL MODELO ANTES DE AGREGAR NUEVOS DATOS
+        // LIMPIAR MODELO
         tiposGastosModel.clear()
         
-        // OBTENER TIPOS DIRECTAMENTE DESDE LA PROPERTY
-        var tipos = gastoModelInstance.obtenerTiposParaComboBox()
-        
-        for (var i = 0; i < tipos.length; i++) {
-            var tipo = tipos[i]
-            
-            // CREAR OBJETO CON TIPOS CONSISTENTES
-            var tipoFormatted = {
-                id: parseInt(tipo.id || 0),
-                nombre: String(tipo.text || tipo.Nombre || "Sin nombre"),  // ← USAR 'text' primero
-                descripcion: String(tipo.descripcion || "Tipo de gasto"),
-                ejemplos: [],
-                color: String(getColorForTipo(tipo.text || tipo.Nombre || ""))
+        // ✅ CORREGIDO: Usar la property tipografía correcta
+        try {
+            // Opción 1: Intentar con la property tiposGastos
+            if (gastoModelInstance.tiposGastos) {
+                var tipos = gastoModelInstance.tiposGastos
+                console.log("📊 Tipos obtenidos via property:", tipos.length)
+                
+                for (var i = 0; i < tipos.length; i++) {
+                    var tipo = tipos[i]
+                    
+                    // Extraer nombre correctamente
+                    var nombreTipo = tipo.Nombre || tipo.nombre || tipo.text || "Sin nombre"
+                    
+                    var tipoFormatted = {
+                        id: parseInt(tipo.id || 0),
+                        nombre: String(nombreTipo),
+                        descripcion: String(tipo.descripcion || tipo.descripcion || "Tipo de gasto"),
+                        color: String(getColorForTipo(nombreTipo))
+                    }
+                    
+                    console.log("🏷️ Tipo cargado:", nombreTipo, "Color:", tipoFormatted.color)
+                    tiposGastosModel.append(tipoFormatted)
+                }
+            } 
+            // Opción 2: Si no funciona, usar el método
+            else {
+                var tiposArray = gastoModelInstance.obtenerTiposParaComboBox()
+                console.log("📊 Tipos obtenidos via método:", tiposArray.length)
+                
+                for (var j = 0; j < tiposArray.length; j++) {
+                    var tipo2 = tiposArray[j]
+                    var nombreTipo2 = tipo2.Nombre || tipo2.nombre || tipo2.text || "Sin nombre"
+                    
+                    tiposGastosModel.append({
+                        id: parseInt(tipo2.id || 0),
+                        nombre: String(nombreTipo2),
+                        descripcion: String(tipo2.descripcion || "Tipo de gasto"),
+                        color: String(getColorForTipo(nombreTipo2))
+                    })
+                }
             }
-            
-            tiposGastosModel.append(tipoFormatted)
+        } catch (error) {
+            console.log("❌ Error cargando tipos:", error)
         }
         
-        // Actualizar ComboBox
-        filtroTipoServicio.model = getTiposGastosNombres()
-
-        if (tipoGastoCombo) {
-            tipoGastoCombo.model = getTiposGastosParaCombo()
-        }
+        console.log("✅ Tipos de gastos cargados:", tiposGastosModel.count)
+        
+        // Actualizar ComboBoxes
+        Qt.callLater(function() {
+            filtroTipoServicio.model = getTiposGastosNombres()
+            if (tipoGastoCombo) {
+                tipoGastoCombo.model = getTiposGastosParaCombo()
+            }
+        })
     }
     
     // ✅ NUEVA FUNCIÓN PARA CARGAR PROVEEDORES
@@ -401,18 +458,6 @@ Item {
         return Qt.formatDate(new Date(), "yyyy-MM-dd")
     }
     
-    function getColorForTipo(nombreTipo) {
-        switch(nombreTipo) {
-            case "Servicios Básicos": return infoColor
-            case "Personal": return violetColor
-            case "Alimentación": return successColor
-            case "Mantenimiento": return warningColor
-            case "Administrativos": return primaryColor
-            case "Suministros Médicos": return "#e67e22"
-            default: return "#95a5a6"
-        }
-    }
-    
     function showSuccessMessage(message) {
         successToast.text = message
         successToast.visible = true
@@ -472,7 +517,6 @@ Item {
         return proveedores
     }
   
-    // FUNCIÓN PARA ACTUALIZAR PAGINACIÓN - MEJORADA CON FILTRO "TODOS"
     function cargarPaginaDesdeBD() {
         if (!gastoModelInstance) {
             console.log("GastoModel no disponible aún")
@@ -480,6 +524,8 @@ Item {
         }
         
         loadingIndicator.visible = true;
+        
+        console.log("🔍 Cargando página de gastos...")
         
         // Validar y obtener el año correctamente
         var añoValor = 0;
@@ -489,54 +535,70 @@ Item {
             añoValor = new Date().getFullYear();
         }
         
-        // ✅ PROCESAR FILTROS MEJORADOS CON "TODOS LOS PERÍODOS"
         var filtrosActuales = {
             tipo_id: filtroTipoServicio.currentIndex > 0 ? 
                 tiposGastosModel.get(filtroTipoServicio.currentIndex - 1).id : 0,
-            mes: 0,  // Por defecto "todos los períodos"
+            mes: 0,
             año: añoValor
         };
         
-        // ✅ NUEVA LÓGICA PARA FILTRO DE MES CON "TODOS LOS PERÍODOS"
         if (filtroMes.currentIndex === 0) {
-            // "Todos los períodos" - no filtrar por fecha
             filtrosActuales.mes = 0;
             filtrosActuales.año = 0;
         } else {
-            // Mes específico (índice - 1 porque "Todos los períodos" está en posición 0)
             filtrosActuales.mes = filtroMes.currentIndex;
             filtrosActuales.año = añoValor;
         }
         
-        console.log("Aplicando filtros:", JSON.stringify(filtrosActuales));
+        console.log("📊 Aplicando filtros:", JSON.stringify(filtrosActuales));
         
         var offset = currentPageServicios * itemsPerPageServicios;
         
-        // LLAMADA DIRECTA A LOS MÉTODOS DEL MODEL
+        // LLAMADA DIRECTA
         var gastosPagina = gastoModelInstance.obtenerGastosPaginados(offset, itemsPerPageServicios, filtrosActuales);
         var totalGastos = gastoModelInstance.obtenerTotalGastos(filtrosActuales);
         
-        // Limpiar modelo local
+        // Limpiar modelo
         gastosPaginadosModel.clear();
         
-        // Poblar modelo local con datos del backend
+        console.log("📦 Gastos recibidos del backend:", gastosPagina.length);
+        
+        // Poblar modelo
         for (var i = 0; i < gastosPagina.length; i++) {
             var gasto = gastosPagina[i];
+            
+            // DEBUG detallado
+            console.log("📄 Gasto", i, ":", {
+                id: gasto.id,
+                tipo_nombre: gasto.tipo_nombre,
+                proveedor_nombre: gasto.proveedor_nombre,
+                Proveedor: gasto.Proveedor,
+                proveedor: gasto.proveedor
+            });
+            
+            // ✅ CORRECCIÓN: Usar el campo que el backend definitivamente retorna
+            var nombreProveedor = gasto.Proveedor || gasto.proveedor_nombre || gasto.proveedor || "Sin proveedor";
+            console.log("🏢 Proveedor extraído:", nombreProveedor, "desde campos:", {
+                Proveedor: gasto.Proveedor,
+                proveedor_nombre: gasto.proveedor_nombre,
+                proveedor: gasto.proveedor
+            });
+            
             gastosPaginadosModel.append({
-                gastoId: gasto.id || gasto.ID,
-                tipoGasto: gasto.tipo_nombre,
-                descripcion: gasto.Descripcion,
-                monto: parseFloat(gasto.Monto || 0).toFixed(2),
-                fechaGasto: gasto.Fecha,
-                proveedor: gasto.Proveedor,
-                registradoPor: gasto.usuario_nombre
+                gastoId: gasto.id || 0,
+                tipoGasto: gasto.tipo_nombre || "Sin tipo",
+                descripcion: gasto.Descripcion || gasto.descripcion || "Sin descripción",
+                monto: parseFloat(gasto.Monto || gasto.monto || 0).toFixed(2),
+                fechaGasto: gasto.Fecha || gasto.fechaGasto || "",
+                proveedor: nombreProveedor,
+                registradoPor: gasto.usuario_nombre || gasto.registradoPor || "Usuario desconocido"
             });
         }
         
         totalPagesServicios = Math.ceil(totalGastos / itemsPerPageServicios);
         loadingIndicator.visible = false;
         
-        console.log("Página cargada:", gastosPagina.length, "gastos, Total páginas:", totalPagesServicios);
+        console.log("✅ Página cargada:", gastosPaginadosModel.count, "gastos, Total páginas:", totalPagesServicios);
     }
 
     // FUNCIÓN PARA LIMPIAR FILTROS
@@ -1861,17 +1923,40 @@ Item {
                                 width: parent.width
                                 height: 40
                                 
+                                // ✅ FIX: Convertir ListModel a Array
                                 proveedoresModel: {
-                                    var lista = []
-                                    for (var i = 0; i < proveedoresGastosModel.count; i++) {
-                                        lista.push(proveedoresGastosModel.get(i))
+                                    try {
+                                        if (!proveedoresGastosModel || proveedoresGastosModel.count === undefined) {
+                                            console.log("⚠️ proveedoresGastosModel no disponible")
+                                            return []
+                                        }
+                                        
+                                        var array = []
+                                        for (var i = 0; i < proveedoresGastosModel.count; i++) {
+                                            array.push(proveedoresGastosModel.get(i))
+                                        }
+                                        
+                                        // console.log("📦 Proveedores convertidos a array:", array.length)
+                                        return array
+                                    } catch (e) {
+                                        console.log("❌ Error convirtiendo proveedores a array:", e)
+                                        return []
                                     }
-                                    return lista
                                 }
                                 
-                                onProveedorCambiado: function(id, nombre) {
-                                    gastoForm.selectedProveedorId = String(id)  // Asegurar que sea string
-                                    console.log("🏢 Proveedor seleccionado:", nombre, "ID:", id, "Tipo:", typeof id)
+                                // ✅ PROPERTY WATCHER para depuración
+                                onProveedoresModelChanged: {
+                                    console.log("🔄 ProveedorComboBox.proveedoresModel cambiado, longitud:", proveedoresModel.length)
+                                }
+                                
+                                onProveedorCambiado: function(proveedor, proveedorId) {
+                                    gastoForm.selectedProveedorId = String(proveedorId)
+                                    console.log("🏢 Proveedor seleccionado:", proveedor, "ID:", proveedorId, "Tipo:", typeof proveedorId)
+                                }
+                                
+                                onNuevoProveedorCreado: function(nombreProveedor) {
+                                    console.log("🆕 Creando nuevo proveedor:", nombreProveedor)
+                                    crearNuevoProveedorGasto(nombreProveedor)
                                 }
                             }
                         }
@@ -2457,111 +2542,127 @@ Item {
         }
     }
 
-    // ✅ DIÁLOGO SIMPLE PARA CREAR PROVEEDOR
     Dialog {
         id: dialogoNuevoProveedor
         anchors.centerIn: parent
-        width: Math.min(500, parent.width * 0.9)
-        height: Math.min(320, parent.height * 0.5) // Reducida la altura
+        width: Math.min(380, parent.width * 0.65)
+        height: Math.min(300, parent.height * 0.45)
         modal: true
         title: ""
         
         background: Rectangle {
             color: whiteColor
-            radius: 10
-            border.color: "#DDD"
+            radius: 14
+            border.color: "#E5E7EB"
             border.width: 1
         }
         
         ColumnLayout {
             anchors.fill: parent
+            anchors.margins: 0
             spacing: 0
             
-            // Header
+            // Header mejorado
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 50
+                Layout.preferredHeight: 65
                 color: successColor
-                radius: 10
+                radius: 14
                 
-                Rectangle {
-                    anchors.bottom: parent.bottom
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    height: 10
-                    color: parent.color
-                }
-                
-                Label {
-                    anchors.centerIn: parent
-                    text: "NUEVO PROVEEDOR"
-                    font.pixelSize: 14
-                    font.bold: true
-                    color: whiteColor
-                }
-                
-                Button {
-                    anchors.right: parent.right
-                    anchors.rightMargin: 10
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: 28
-                    height: 28
-                    text: "×"
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.margins: 15
+                    spacing: 12
                     
-                    background: Rectangle {
-                        color: "transparent"
-                        radius: 14
+                    Label {
+                        text: "🏢"
+                        font.pixelSize: 28
                     }
                     
-                    contentItem: Label {
-                        text: parent.text
-                        color: whiteColor
-                        font.pixelSize: 18
-                        font.bold: true
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
+                    Column {
+                        Layout.fillWidth: true
+                        spacing: 3
+                        
+                        Label {
+                            text: "Nuevo Proveedor"
+                            font.pixelSize: 16
+                            font.bold: true
+                            color: whiteColor
+                        }
+                        
+                        Label {
+                            text: "Agrega un nuevo proveedor de servicios"
+                            font.pixelSize: 11
+                            color: "#F0F9FF"
+                            opacity: 0.9
+                        }
                     }
                     
-                    onClicked: dialogoNuevoProveedor.close()
+                    Button {
+                        Layout.alignment: Qt.AlignRight | Qt.AlignTop
+                        width: 36
+                        height: 36
+                        text: "✕"
+                        
+                        background: Rectangle {
+                            color: "transparent"
+                            radius: 8
+                        }
+                        
+                        contentItem: Label {
+                            text: parent.text
+                            color: whiteColor
+                            font.pixelSize: 20
+                            font.bold: true
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                        
+                        onClicked: dialogoNuevoProveedor.close()
+                        
+                        HoverHandler {
+                            cursorShape: Qt.PointingHandCursor
+                        }
+                    }
                 }
             }
             
-            // Contenido - SIMPLIFICADO
+            // Contenido
             ColumnLayout {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                Layout.margins: 20
-                spacing: 15
+                Layout.margins: 25
+                spacing: 18
                 
-                // Solo campo Nombre (obligatorio)
                 Column {
                     Layout.fillWidth: true
-                    spacing: 8
+                    spacing: 10
                     
                     Label {
-                        text: "Nombre del Proveedor: *"
+                        text: "Nombre del Proveedor *"
                         font.bold: true
-                        font.pixelSize: 12
+                        font.pixelSize: 13
                         color: textColor
                     }
                     
                     TextField {
                         id: nuevoProvNombre
                         width: parent.width
-                        height: 40
-                        placeholderText: "Ej: Empresa Eléctrica, Agua Potable, etc."
+                        height: 44
+                        placeholderText: "Ej: Empresa Eléctrica, Agua Potable..."
                         font.pixelSize: 12
                         
-                        // Validación en tiempo real
-                        onTextChanged: {
-                            if (text.length > 0 && text.length < 3) {
-                                validationMessage.visible = true
-                            } else {
-                                validationMessage.visible = false
-                            }
+                        background: Rectangle {
+                            color: "#F9FAFB"
+                            border.color: nuevoProvNombre.activeFocus ? primaryColor : "#E5E7EB"
+                            border.width: 2
+                            radius: 8
                         }
                         
-                        // Enter para crear
+                        onTextChanged: {
+                            validationMessage.visible = text.length > 0 && text.length < 3
+                        }
+                        
                         Keys.onReturnPressed: {
                             if (nuevoProvNombre.text.trim().length >= 3) {
                                 crearProveedorAction()
@@ -2570,10 +2671,9 @@ Item {
                     }
                 }
                 
-                // Mensaje de validación
                 Label {
                     id: validationMessage
-                    text: "⚠️ El nombre debe tener al menos 3 caracteres"
+                    text: "⚠️ Mínimo 3 caracteres"
                     font.pixelSize: 11
                     color: dangerColor
                     visible: false
@@ -2585,21 +2685,23 @@ Item {
             // Botones
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 60
-                color: "transparent"
+                Layout.preferredHeight: 70
+                color: "#F9FAFB"
+                radius: 14
                 
                 RowLayout {
                     anchors.centerIn: parent
+                    anchors.margins: 15
                     spacing: 12
                     
                     Button {
-                        width: 100
-                        height: 36
+                        Layout.preferredWidth: 120
+                        Layout.preferredHeight: 40
                         text: "Cancelar"
                         
                         background: Rectangle {
                             color: "#F3F4F6"
-                            radius: 6
+                            radius: 8
                             border.color: "#D1D5DB"
                             border.width: 1
                         }
@@ -2608,6 +2710,7 @@ Item {
                             text: parent.text
                             color: textColor
                             font.pixelSize: 12
+                            font.bold: true
                             horizontalAlignment: Text.AlignHCenter
                             verticalAlignment: Text.AlignVCenter
                         }
@@ -2616,20 +2719,24 @@ Item {
                             nuevoProvNombre.text = ""
                             dialogoNuevoProveedor.close()
                         }
+                        
+                        HoverHandler {
+                            cursorShape: Qt.PointingHandCursor
+                        }
                     }
                     
                     Button {
                         id: crearProvButton
-                        width: 100
-                        height: 36
+                        Layout.preferredWidth: 120
+                        Layout.preferredHeight: 40
                         text: "Crear"
                         enabled: nuevoProvNombre.text.trim().length >= 3
                         
                         background: Rectangle {
                             color: parent.enabled ? 
-                                (parent.pressed ? Qt.darker(successColor, 1.1) : successColor) : 
-                                "#bdc3c7"
-                            radius: 6
+                                (parent.hovered ? Qt.darker(successColor, 1.05) : successColor) : 
+                                "#D1D5DB"
+                            radius: 8
                         }
                         
                         contentItem: Label {
@@ -2642,14 +2749,15 @@ Item {
                         }
                         
                         onClicked: crearProveedorAction()
+                        
+                        HoverHandler {
+                            cursorShape: parent.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                        }
                     }
                 }
             }
         }
         
-        
-        
-        // Al abrir el diálogo, enfocar el campo de nombre
         onOpened: {
             nuevoProvNombre.focus = true
             nuevoProvNombre.text = ""
@@ -2695,22 +2803,61 @@ Item {
         console.log("📢 " + titulo + ": " + mensaje)
     }
     
-    // INICIALIZACIÓN MEJORADA CON APPCONTROLLER
     Component.onCompleted: {
-        console.log("Módulo Servicios Básicos iniciado")
+        console.log("=== INICIALIZANDO SERVICIOS BÁSICOS ===")
         
-        if (appController && appController.gasto_model_instance) {
-            gastoModelInstance = appController.gasto_model_instance
-            Qt.callLater(function() {
-                loadTiposGastosFromModel()
-                loadProveedoresFromModel()
-                loadProveedoresGastosFromModel()  // ← AGREGAR ESTA LÍNEA
-                cargarPaginaDesdeBD()
-            })
-        } else {
-            console.log("Esperando inicialización de GastoModel...")
-            delayedInitTimer.start()
+        // ✅ PASO 1: Esperar a que gastoModelInstance esté disponible
+        var intentos = 0
+        var timer = null
+        
+        function verificarGastoModel() {
+            intentos++
+            console.log("Intento", intentos, "- GastoModel disponible?", gastoModelInstance ? "✅ SÍ" : "❌ NO")
+            
+            if (gastoModelInstance) {
+                console.log("✅ GastoModel encontrado")
+                
+                // ✅ PASO 2: Cargar tipos de gastos
+                if (typeof loadTiposGastosFromModel === 'function') {
+                    loadTiposGastosFromModel()
+                    console.log("✅ Tipos de gastos cargados")
+                }
+                
+                // ✅ PASO 3: Cargar proveedores de gastos
+                if (typeof loadProveedoresGastosFromModel === 'function') {
+                    loadProveedoresGastosFromModel()
+                    console.log("✅ Proveedores cargados")
+                } else {
+                    console.log("⚠️ loadProveedoresGastosFromModel no está definida")
+                }
+                
+                // ✅ PASO 4: Cargar datos de gastos con pequeño delay
+                Qt.callLater(function() {
+                    if (typeof cargarPaginaDesdeBD === 'function') {
+                        cargarPaginaDesdeBD()
+                        console.log("✅ Gastos cargados")
+                    }
+                }, 200)
+                
+                // Detener timer
+                if (timer) timer.stop()
+            } else if (intentos < 10) {
+                // Reintentar
+                if (!timer) {
+                    timer = Qt.createQmlObject("import QtQuick 2.15; Timer { interval: 100; repeat: true }", serviciosBasicosRoot)
+                    timer.triggered.connect(verificarGastoModel)
+                }
+                if (!timer.running) timer.start()
+            } else {
+                console.log("❌ GastoModel no se encontró después de 10 intentos")
+                if (timer) timer.stop()
+            }
         }
+        
+        // Iniciar verificación
+        verificarGastoModel()
+        
+        console.log("=== FIN INICIALIZACIÓN ===")
     }
     // Agregar después del Component.onCompleted:
     onCurrentSubsectionChanged: {
@@ -2724,27 +2871,65 @@ Item {
             return
         }
         
-        // ✅ EVITAR BUCLE: Solo cargar si el modelo está vacío o si es una recarga forzada
-        if (proveedoresGastosModel.count > 0) {
-            console.log("📊 Proveedores ya cargados:", proveedoresGastosModel.count)
-            return
-        }
-        
         console.log("🏢 Cargando proveedores de gastos...")
         
-        var proveedores = gastoModelInstance.obtenerProveedoresGastosParaComboBox()
-        
-        for (var i = 0; i < proveedores.length; i++) {
-            var prov = proveedores[i]
-            proveedoresGastosModel.append({
-                id: parseInt(prov.id || 0),
-                nombre: String(prov.nombre || "Sin proveedor"),
-                displayText: String(prov.display_text || prov.nombre)
-                // ✅ ELIMINADOS: telefono, direccion, notas
-            })
+        try {
+            // ✅ LLAMAR AL SLOT REGISTRADO
+            var proveedores = gastoModelInstance.obtenerProveedoresGastosParaComboBox()
+            console.log("📊 Proveedores obtenidos del backend:", proveedores ? proveedores.length : 0)
+            
+            // ✅ VALIDAR QUE SEA UN ARRAY
+            if (!Array.isArray(proveedores)) {
+                console.log("⚠️ proveedores no es array, intentando convertir")
+                if (proveedores && typeof proveedores === 'object') {
+                    proveedores = Object.values(proveedores)
+                } else {
+                    proveedores = []
+                }
+            }
+            
+            // ✅ LIMPIAR Y POBLAR EL MODELO
+            proveedoresGastosModel.clear()
+            
+            if (proveedores && proveedores.length > 0) {
+                for (var i = 0; i < proveedores.length; i++) {
+                    var prov = proveedores[i]
+                    if (prov && prov.id !== undefined) {
+                        proveedoresGastosModel.append({
+                            id: parseInt(prov.id || 0),
+                            nombre: String(prov.nombre || prov.Nombre || "Sin nombre"),
+                            displayText: String(prov.display_text || prov.displayText || prov.nombre || "Sin nombre")
+                        })
+                        console.log("✅ Proveedor agregado:", prov.nombre, "ID:", prov.id)
+                    }
+                }
+            } else {
+                console.log("⚠️ No hay proveedores, agregando proveedor por defecto")
+                proveedoresGastosModel.append({
+                    id: 0,
+                    nombre: "Sin proveedor",
+                    displayText: "Sin proveedor"
+                })
+            }
+            
+            console.log("✅ Proveedores cargados en modelo:", proveedoresGastosModel.count)
+            
+            // ✅ ACTUALIZAR COMBOBOX SI EXISTE
+            if (typeof proveedorComboBox !== 'undefined' && proveedorComboBox) {
+                Qt.callLater(function() {
+                    var proveedoresArray = []
+                    for (var j = 0; j < proveedoresGastosModel.count; j++) {
+                        var p = proveedoresGastosModel.get(j)
+                        if (p) proveedoresArray.push(p)
+                    }
+                    proveedorComboBox.proveedoresModel = proveedoresArray
+                    console.log("🔄 ProveedorComboBox actualizado con", proveedoresArray.length, "proveedores")
+                })
+            }
+            
+        } catch (error) {
+            console.log("❌ Error cargando proveedores:", error)
         }
-        
-        console.log("✅ Proveedores cargados:", proveedoresGastosModel.count)
     }
 
     function buscarProveedorGasto(termino) {
@@ -2770,62 +2955,85 @@ Item {
         }
     }
 
+    // En el Connections para el ProveedorComboBox:
+    Connections {
+        target: proveedorComboBox
+        
+        function onNuevoProveedorCreado(nombreProveedor) {
+            console.log("📱 Señal: Crear nuevo proveedor:", nombreProveedor)
+            crearNuevoProveedorGasto(nombreProveedor)
+        }
+    }
+
     function crearNuevoProveedorGasto(nombre) {
         if (!gastoModelInstance) {
-            showErrorMessage("Error", "Sistema no disponible")
-            return false
+            console.log("❌ GastoModel no disponible")
+            return
         }
         
-        if (!nombre || nombre.trim().length < 3) {
-            showErrorMessage("Error", "El nombre debe tener al menos 3 caracteres")
-            return false
+        if (!nombre || nombre.length < 3) {
+            showErrorMessage("Error", "El nombre del proveedor debe tener al menos 3 caracteres")
+            return
         }
         
-        console.log("🏢 Creando nuevo proveedor:", nombre)
+        console.log("🏢 Creando proveedor:", nombre)
         
-        // ✅ LLAMADA ACTUALIZADA - solo nombre
-        var proveedorId = gastoModelInstance.crearProveedorGasto(nombre.trim())
+        // Llamar al modelo para crear proveedor
+        var proveedorId = gastoModelInstance.crearProveedorGasto(nombre)
+        
+        console.log("✅ Proveedor creado con ID:", proveedorId)
         
         if (proveedorId > 0) {
-            console.log("✅ Proveedor creado con ID:", proveedorId)
-            loadProveedoresGastosFromModel()
-            
-            // Seleccionar el proveedor recién creado en el ComboBox
+            // ✅ FORZAR RECARGA INMEDIATA
             Qt.callLater(function() {
-                proveedorComboBox.setSelectedById(proveedorId)
-                gastoForm.selectedProveedorIndex = proveedorComboBox.currentIndex
-            })
-            
-            return true
+                console.log("🔄 Recargando proveedores...")
+                loadProveedoresGastosFromModel()
+                
+                // ✅ SELECCIONAR EL PROVEEDOR CREADO
+                Qt.callLater(function() {
+                    if (proveedorComboBox && typeof proveedorComboBox.setProveedorById === 'function') {
+                        proveedorComboBox.setProveedorById(proveedorId)
+                        console.log("✅ Proveedor seleccionado automáticamente:", proveedorId)
+                    }
+                    showSuccessMessage("Proveedor '" + nombre + "' creado exitosamente")
+                }, 300)
+            }, 100)
+        } else {
+            showErrorMessage("Error", "No se pudo crear el proveedor")
+        }
+    }
+
+    function crearProveedorAction() {
+        var nombre = nuevoProvNombre.text.trim()
+        
+        if (nombre.length < 3) {
+            showErrorMessage("Error", "El nombre debe tener al menos 3 caracteres")
+            return
         }
         
-        return false
-    }
-
-    // Conectar con la propiedad del main.qml
-    Connections {
-        target: serviciosBasicosRoot
-        function onCurrentServiciosSubsectionChanged() {
-            if (typeof currentServiciosSubsection !== 'undefined') {
-                currentSubsection = currentServiciosSubsection
-            }
+        console.log("🏢 Creando proveedor:", nombre)
+        var proveedorId = gastoModelInstance.crearProveedorGasto(nombre)
+        
+        if (proveedorId > 0) {
+            console.log("✅ Proveedor creado ID:", proveedorId)
+            
+            // Limpiar y cerrar inmediatamente
+            nuevoProvNombre.text = ""
+            dialogoNuevoProveedor.close()
+            
+            // Actualizar lista
+            Qt.callLater(function() {
+                loadProveedoresGastosFromModel()
+                
+                Qt.callLater(function() {
+                    if (proveedorComboBox && typeof proveedorComboBox.setProveedorById === 'function') {
+                        proveedorComboBox.setProveedorById(proveedorId)
+                    }
+                    showSuccessMessage("✅ Proveedor '" + nombre + "' creado")
+                }, 300)
+            }, 100)
+        } else {
+            showErrorMessage("Error", "No se pudo crear el proveedor")
         }
     }
-
-    // Función para crear proveedor
-        function crearProveedorAction() {
-            var nombre = nuevoProvNombre.text.trim()
-            
-            if (nombre.length < 3) {
-                showErrorMessage("Error", "El nombre debe tener al menos 3 caracteres")
-                return
-            }
-            
-            // Crear proveedor solo con nombre
-            if (crearNuevoProveedorGasto(nombre)) {
-                showSuccessMessage("Proveedor creado: " + nombre)
-                nuevoProvNombre.text = ""
-                dialogoNuevoProveedor.close()
-            }
-        }
 }

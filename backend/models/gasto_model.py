@@ -1129,7 +1129,7 @@ class GastoModel(QObject):
             if gasto_id:
                 self._cargar_gastos()
                 
-                mensaje = f"Gasto creado exitosamente - ID: {gasto_id}"
+                mensaje = "Gasto creado exitosamente"
                 self.gastoCreado.emit(True, mensaje)
                 self.successMessage.emit(mensaje)
                 
