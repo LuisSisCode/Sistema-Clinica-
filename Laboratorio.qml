@@ -3573,8 +3573,17 @@ Item {
             // ✅ VALIDAR QUE LAS FECHAS EXISTAN ANTES DE CONVERTIR
             if (fechaDesde && fechaHasta) {
                 try {
-                    filtros.fecha_desde = fechaDesde.toISOString().split('T')[0];
-                    filtros.fecha_hasta = fechaHasta.toISOString().split('T')[0];
+                    // ✅ CORREGIDO: Usar fecha local sin conversión UTC
+                    var año_desde = fechaDesde.getFullYear();
+                    var mes_desde = String(fechaDesde.getMonth() + 1).padStart(2, '0');
+                    var dia_desde = String(fechaDesde.getDate()).padStart(2, '0');
+                    filtros.fecha_desde = año_desde + '-' + mes_desde + '-' + dia_desde;
+                    
+                    var año_hasta = fechaHasta.getFullYear();
+                    var mes_hasta = String(fechaHasta.getMonth() + 1).padStart(2, '0');
+                    var dia_hasta = String(fechaHasta.getDate()).padStart(2, '0');
+                    filtros.fecha_hasta = año_hasta + '-' + mes_hasta + '-' + dia_hasta;
+                    
                     console.log("📅 Fechas aplicadas:", filtros.fecha_desde, "al", filtros.fecha_hasta)
                 } catch (error) {
                     console.log("❌ Error convirtiendo fechas:", error)

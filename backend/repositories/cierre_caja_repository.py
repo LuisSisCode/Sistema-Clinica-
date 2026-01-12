@@ -217,7 +217,7 @@ class CierreCajaRepository(BaseRepository):
         return self._execute_query(query, (fecha_sql,), use_cache=False)
     
     def _get_compras_farmacia(self, inicio: str, fin: str) -> List[Dict[str, Any]]:
-        """Obtiene compras de farmacia con detalles de productos"""
+        """Obtiene compras de farmacia con detalles de productos - CORREGIDO FIFO 2.0"""
         query = """
         SELECT 
             c.id,
@@ -227,13 +227,12 @@ class CierreCajaRepository(BaseRepository):
             CONCAT(u.Nombre, ' ', u.Apellido_Paterno) as NombreUsuario,
             'COMPRA_FARMACIA' as TipoEgreso,
             prov.Nombre as NombreProveedor,
-            -- ✅ CORRECTO: Obtener productos comprados a través de Lote
+            -- ✅ CORREGIDO: Relación directa Compra → Lote (sin DetalleCompra)
             STUFF((
-                SELECT '; ' + p.Nombre + ' x' + CAST(dc.Cantidad_Unitario AS VARCHAR(10))
-                FROM DetalleCompra dc
-                INNER JOIN Lote l ON dc.Id_Lote = l.id
+                SELECT '; ' + p.Nombre + ' x' + CAST(l.Cantidad_Unitario AS VARCHAR(10))
+                FROM Lote l
                 INNER JOIN Productos p ON l.Id_Producto = p.id
-                WHERE dc.Id_Compra = c.id
+                WHERE l.Id_Compra = c.id
                 FOR XML PATH(''), TYPE
             ).value('.', 'NVARCHAR(MAX)'), 1, 2, '') as ProductosComprados
         FROM Compra c
@@ -992,7 +991,7 @@ class CierreCajaRepository(BaseRepository):
 
     def get_cierre_por_rango_horario(self, fecha: str, hora_inicio: str, hora_fin: str) -> Optional[Dict[str, Any]]:
         """
-        ✅ NUEVO: Obtiene UN cierre específico por fecha y rango horario
+        ✅ CORREGIDO: Obtiene UN cierre específico por fecha y rango horario
         
         Args:
             fecha: Fecha en formato DD/MM/YYYY
@@ -1003,11 +1002,13 @@ class CierreCajaRepository(BaseRepository):
             Dict con datos del cierre o None si no existe
         """
         try:
+            # ✅ CORRECCIÓN: Usar conversión de fecha
             fecha_sql = self._convertir_fecha_sql(fecha)
             
-            # Construir timestamps para buscar el cierre exacto
-            timestamp_inicio = f"{fecha_sql} {hora_inicio}:00.000"
-            timestamp_fin = f"{fecha_sql} {hora_fin}:59.999"
+            print(f"🔍 Buscando cierre específico:")
+            print(f"   Fecha original: {fecha}")
+            print(f"   Fecha SQL: {fecha_sql}")
+            print(f"   Horario: {hora_inicio} - {hora_fin}")
             
             query = """
             SELECT TOP 1
@@ -1020,7 +1021,8 @@ class CierreCajaRepository(BaseRepository):
                 Diferencia,
                 IdUsuario,
                 FechaCierre,
-                Observaciones
+                Observaciones,
+                pdf_filepath
             FROM CierreCaja
             WHERE CAST(Fecha AS DATE) = CAST(? AS DATE)
             AND HoraInicio = ?
@@ -1036,7 +1038,10 @@ class CierreCajaRepository(BaseRepository):
             
             if resultado and len(resultado) > 0:
                 cierre = resultado[0]
-                print(f"✅ Cierre encontrado: ID={cierre.get('id')}, EfectivoReal={cierre.get('EfectivoReal')}")
+                print(f"✅ Cierre encontrado:")
+                print(f"   ID: {cierre.get('id')}")
+                print(f"   Efectivo Real: {cierre.get('EfectivoReal')}")
+                print(f"   PDF Filepath: {cierre.get('pdf_filepath', 'No registrado')}")
                 return cierre
             else:
                 print(f"⚠️ No se encontró cierre para {fecha} {hora_inicio}-{hora_fin}")
@@ -1047,6 +1052,171 @@ class CierreCajaRepository(BaseRepository):
             import traceback
             traceback.print_exc()
             return None
+
+    # ===============================
+    # MÉTODOS PARA GESTIÓN DE PDF FILEPATH
+    # ===============================
+
+    def obtener_filepath_pdf(self, fecha: str, hora_inicio: str, hora_fin: str) -> Optional[str]:
+        """
+        ✅ CORREGIDO: Obtiene el filepath del PDF guardado en BD para un cierre específico
+        
+        Args:
+            fecha: Fecha en formato DD/MM/YYYY
+            hora_inicio: Hora inicio en formato HH:MM
+            hora_fin: Hora fin en formato HH:MM
+        
+        Returns:
+            str: Filepath del PDF si existe, None si no
+        """
+        try:
+            # ✅ CORRECCIÓN CRÍTICA: Convertir fecha a formato SQL
+            fecha_sql = self._convertir_fecha_sql(fecha)
+            
+            print(f"🔍 Buscando filepath PDF en BD:")
+            print(f"   Fecha original: {fecha}")
+            print(f"   Fecha SQL: {fecha_sql}")
+            print(f"   Horario: {hora_inicio} - {hora_fin}")
+            
+            query = """
+            SELECT pdf_filepath 
+            FROM CierreCaja
+            WHERE CAST(Fecha AS DATE) = CAST(? AS DATE)
+            AND HoraInicio = ? 
+            AND HoraFin = ?
+            """
+            
+            # ✅ USAR FECHA CONVERTIDA
+            result = self._execute_query(
+                query, 
+                (fecha_sql, hora_inicio, hora_fin),
+                fetch_one=True, 
+                use_cache=False
+            )
+            
+            if result and result.get('pdf_filepath'):
+                filepath = result['pdf_filepath']
+                print(f"✅ Filepath encontrado en BD: {filepath}")
+                return filepath
+            else:
+                print(f"⚠️ No hay filepath registrado para cierre:")
+                print(f"   - Fecha: {fecha_sql}")
+                print(f"   - Horario: {hora_inicio} - {hora_fin}")
+                return None
+                
+        except Exception as e:
+            print(f"❌ Error obteniendo filepath PDF: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+
+    def guardar_filepath_pdf(self, fecha: str, hora_inicio: str, hora_fin: str, filepath: str) -> bool:
+        """
+        ✅ CORREGIDO: Guarda el filepath del PDF en BD para un cierre específico
+        
+        Args:
+            fecha: Fecha en formato DD/MM/YYYY
+            hora_inicio: Hora inicio en formato HH:MM
+            hora_fin: Hora fin en formato HH:MM
+            filepath: Ruta completa del archivo PDF
+        
+        Returns:
+            bool: True si se guardó exitosamente, False si no
+        """
+        try:
+            # ✅ CORRECCIÓN CRÍTICA: Convertir fecha a formato SQL
+            fecha_sql = self._convertir_fecha_sql(fecha)
+            
+            print(f"💾 Guardando filepath PDF en BD:")
+            print(f"   Fecha original: {fecha}")
+            print(f"   Fecha SQL: {fecha_sql}")
+            print(f"   Horario: {hora_inicio} - {hora_fin}")
+            print(f"   Filepath: {filepath}")
+            
+            query = """
+            UPDATE CierreCaja
+            SET pdf_filepath = ?
+            WHERE CAST(Fecha AS DATE) = CAST(? AS DATE)
+            AND HoraInicio = ? 
+            AND HoraFin = ?
+            """
+            
+            # ✅ USAR FECHA CONVERTIDA
+            affected_rows = self._execute_query(
+                query, 
+                (filepath, fecha_sql, hora_inicio, hora_fin),
+                fetch_all=False, 
+                use_cache=False
+            )
+            
+            if affected_rows > 0:
+                print(f"✅ Filepath PDF guardado exitosamente en BD")
+                print(f"   Registros actualizados: {affected_rows}")
+                return True
+            else:
+                print(f"⚠️ No se actualizó ningún registro para guardar filepath")
+                print(f"   Verifica que exista un cierre con:")
+                print(f"   - Fecha: {fecha_sql}")
+                print(f"   - Horario: {hora_inicio} - {hora_fin}")
+                return False
+                
+        except Exception as e:
+            print(f"❌ Error guardando filepath PDF: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
+
+    def limpiar_filepath_pdf(self, fecha: str, hora_inicio: str, hora_fin: str) -> bool:
+        """
+        ✅ CORREGIDO: Limpia el filepath del PDF en BD (lo pone en NULL)
+        Útil cuando el archivo fue eliminado del disco
+        
+        Args:
+            fecha: Fecha en formato DD/MM/YYYY
+            hora_inicio: Hora inicio en formato HH:MM
+            hora_fin: Hora fin en formato HH:MM
+        
+        Returns:
+            bool: True si se limpió exitosamente, False si no
+        """
+        try:
+            # ✅ CORRECCIÓN CRÍTICA: Convertir fecha a formato SQL
+            fecha_sql = self._convertir_fecha_sql(fecha)
+            
+            print(f"🧹 Limpiando filepath PDF en BD:")
+            print(f"   Fecha original: {fecha}")
+            print(f"   Fecha SQL: {fecha_sql}")
+            print(f"   Horario: {hora_inicio} - {hora_fin}")
+            
+            query = """
+            UPDATE CierreCaja
+            SET pdf_filepath = NULL
+            WHERE CAST(Fecha AS DATE) = CAST(? AS DATE)
+            AND HoraInicio = ? 
+            AND HoraFin = ?
+            """
+            
+            # ✅ USAR FECHA CONVERTIDA
+            affected_rows = self._execute_query(
+                query, 
+                (fecha_sql, hora_inicio, hora_fin),
+                fetch_all=False, 
+                use_cache=False
+            )
+            
+            if affected_rows > 0:
+                print(f"✅ Filepath PDF limpiado exitosamente")
+                print(f"   Registros actualizados: {affected_rows}")
+                return True
+            else:
+                print(f"⚠️ No se actualizó ningún registro para limpiar filepath")
+                return False
+                
+        except Exception as e:
+            print(f"❌ Error limpiando filepath PDF: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
     
     # SIN CACHÉ - todas las consultas son directas a BD
     def invalidar_cache_transaccion(self):

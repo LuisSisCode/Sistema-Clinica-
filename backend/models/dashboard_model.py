@@ -389,10 +389,18 @@ class DashboardModel(QObject):
             # Cargar alertas de inventario
             self._actualizar_alertas_inventario()
             
+            # ✅ NUEVO: Forzar emisión de todos los signals después de carga inicial
+            self.farmaciaDataChanged.emit()
+            self.consultasDataChanged.emit()
+            self.laboratorioDataChanged.emit()
+            self.enfermeriaDataChanged.emit()
+            self.serviciosBasicosDataChanged.emit()
+            self.dashboardUpdated.emit()
+            
             # Verificación post-carga
             QTimer.singleShot(2000, self.debug_comparar_con_cierre_caja)
             
-            print("✅ Datos iniciales cargados exitosamente")
+            print("✅ Datos iniciales cargados y signals emitidos")
         except Exception as e:
             print(f"❌ Error cargando datos iniciales: {e}")
             self.errorOccurred.emit(f"Error inicial: {str(e)}")
@@ -465,40 +473,35 @@ class DashboardModel(QObject):
     # ===============================
     
     def _actualizar_farmacia_data(self, fecha_inicio: datetime, fecha_fin: datetime):
-        """Actualiza datos de farmacia/ventas - CORREGIDO para usar datos reales"""
+        """Actualiza datos de farmacia/ventas - USA get_ventas_by_date_range"""
         try:
             if not self.venta_repo:
                 print("⚠️ VentaRepository no disponible")
                 self._farmacia_total = 0.00
                 self.farmaciaDataChanged.emit()
                 return
-                
-            # CORREGIDO: Usar el mismo método que usa CierreCaja
-            fecha_inicio_str = fecha_inicio.strftime('%Y-%m-%d')
-            fecha_fin_str = fecha_fin.strftime('%Y-%m-%d')
             
-            print(f"🔍 Dashboard - Buscando ventas entre {fecha_inicio_str} y {fecha_fin_str}")
+            print(f"🔍 Dashboard - Buscando ventas entre {fecha_inicio.strftime('%Y-%m-%d')} y {fecha_fin.strftime('%Y-%m-%d')}")
             
-            # Usar get_ventas_by_date_range que es el mismo método de CierreCaja
-            try:
-                ventas = self.venta_repo.get_ventas_by_date_range(fecha_inicio, fecha_fin)
-            except AttributeError:
-                # Fallback si no existe el método
-                ventas = self.venta_repo.get_ventas_con_detalles(fecha_inicio_str, fecha_fin_str)
+            # ✅ Usar el método correcto que ahora existe
+            ventas = self.venta_repo.get_ventas_by_date_range(fecha_inicio, fecha_fin)
             
+            # Calcular total
             total = 0.00
             for venta in ventas:
-                # Usar las mismas claves que usa CierreCaja
-                total += round(float(venta.get('Total', venta.get('Venta_Total', 0))), 2)
+                # El método devuelve tanto 'Total' como 'Venta_Total' (son iguales)
+                total += round(float(venta.get('Total', 0)), 2)
             
             print(f"💊 Dashboard - Farmacia calculada: Bs {total:.2f} ({len(ventas)} ventas)")
             
-            if total != self._farmacia_total:
-                self._farmacia_total = round(float(total), 2)
-                self.farmaciaDataChanged.emit()
+            # ✅ Siempre actualizar y emitir, incluso si el valor no cambió
+            self._farmacia_total = round(float(total), 2)
+            self.farmaciaDataChanged.emit()
                 
         except Exception as e:
             print(f"❌ Error actualizando farmacia en dashboard: {e}")
+            import traceback
+            traceback.print_exc()  # ✅ Agregar traceback para debugging
             self._farmacia_total = 0.00
             self.farmaciaDataChanged.emit()
             
@@ -601,9 +604,9 @@ class DashboardModel(QObject):
             
             print(f"🔬 Dashboard - Laboratorio calculado: Bs {total:.2f} ({len(examenes)} exámenes)")
             
-            if total != self._laboratorio_total:
-                self._laboratorio_total = round(total, 2)
-                self.laboratorioDataChanged.emit()
+            # ✅ Siempre actualizar y emitir
+            self._laboratorio_total = round(total, 2)
+            self.laboratorioDataChanged.emit()
                 
         except Exception as e:
             print(f"❌ Error actualizando laboratorio en dashboard: {e}")
@@ -656,9 +659,9 @@ class DashboardModel(QObject):
             
             print(f"🩹 Dashboard - Enfermería calculada: Bs {total:.2f} ({len(procedimientos)} procedimientos)")
             
-            if total != self._enfermeria_total:
-                self._enfermeria_total = round(total, 2)
-                self.enfermeriaDataChanged.emit()
+            # ✅ Siempre actualizar y emitir
+            self._enfermeria_total = round(total, 2)
+            self.enfermeriaDataChanged.emit()
                 
         except Exception as e:
             print(f"❌ Error actualizando enfermería en dashboard: {e}")
@@ -709,9 +712,9 @@ class DashboardModel(QObject):
             total_egresos = total_gastos + total_compras
             print(f"💰 Dashboard - EGRESOS TOTALES: Bs {total_egresos:.2f} (Gastos: {total_gastos:.2f} + Compras: {total_compras:.2f})")
             
-            if total_egresos != self._servicios_basicos_total:
-                self._servicios_basicos_total = round(total_egresos, 2)
-                self.serviciosBasicosDataChanged.emit()
+            # ✅ Siempre actualizar y emitir
+            self._servicios_basicos_total = round(total_egresos, 2)
+            self.serviciosBasicosDataChanged.emit()
                 
         except Exception as e:
             print(f"❌ Error actualizando egresos en dashboard: {e}")
@@ -850,45 +853,29 @@ class DashboardModel(QObject):
             self.alertasChanged.emit()
     
     def _actualizar_alertas_inventario(self):
-        """✅ NUEVO: Actualiza alertas de inventario (stock bajo, vencimientos)"""
+        """Actualiza alertas de inventario - OPTIMIZADO sin crear instancias múltiples"""
         try:
             print("🔄 Dashboard: Actualizando alertas de inventario...")
             
-            # 1. Obtener alertas del inventario
-            try:
-                from backend.models.inventario_model import InventarioModel
-                
-                inventario_temp = InventarioModel()
-                alertas = inventario_temp.obtener_alertas_inventario()
-                
-                if alertas and len(alertas) > 0:
-                    self._alertas_inventario = alertas
-                    print(f"📊 Dashboard: {len(alertas)} alertas de inventario obtenidas")
-                else:
-                    self._alertas_inventario = []
-                    print("📊 Dashboard: No hay alertas de inventario")
-                    
-            except ImportError as e:
-                print(f"❌ No se pudo importar InventarioModel: {e}")
-                self._alertas_inventario = []
-            
-            # 2. Obtener productos bajo stock específicamente
-            try:
+            # ✅ Usar repositorios existentes en lugar de crear nuevos
+            if not hasattr(self, '_producto_repo_alertas'):
                 from backend.repositories.producto_repository import ProductoRepository
-                
-                producto_repo = ProductoRepository()
-                productos_bajo_stock = producto_repo.get_productos_bajo_stock(10) or []
-                
+                self._producto_repo_alertas = ProductoRepository()
+            
+            # ✅ CORREGIDO: Usar el método correcto
+            try:
+                productos_bajo_stock = self._producto_repo_alertas.get_productos_bajo_stock(10) or []
+                self._alertas_inventario = productos_bajo_stock  # Reutilizar como alertas
                 self._productos_bajo_stock = productos_bajo_stock
                 print(f"📦 Dashboard: {len(productos_bajo_stock)} productos bajo stock")
-                
-            except ImportError as e:
-                print(f"❌ No se pudo importar ProductoRepository: {e}")
+            except Exception as e:
+                print(f"⚠️ Error obteniendo productos bajo stock: {e}")
+                self._alertas_inventario = []
                 self._productos_bajo_stock = []
             
-            # 3. Emitir signal de actualización
+            # Emitir signal de actualización
             self.alertasInventarioChanged.emit()
-            print("✅ Dashboard: Alertas de inventario actualizadas")
+            print("✅ Dashboard: Alertas actualizadas (sin crear instancias nuevas)")
             
         except Exception as e:
             print(f"❌ Error actualizando alertas de inventario: {e}")

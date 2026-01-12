@@ -93,6 +93,11 @@ class LaboratorioModel(QObject):
                 self._usuario_actual_rol = usuario_rol.strip()
                 print(f"👤 Usuario establecido en LaboratorioModel: ID {usuario_id}, Rol: {usuario_rol}")
                 self.operacionExitosa.emit(f"Usuario {usuario_id} ({usuario_rol}) establecido en módulo de laboratorio")
+                
+                # ✅ NUEVO: Cargar datos DESPUÉS de autenticar
+                print("🔄 Cargando datos del laboratorio tras autenticación...")
+                QTimer.singleShot(500, self.refrescarDatos)  # Cargar con pequeño delay
+                
             else:
                 print(f"⚠️ ID de usuario inválido en LaboratorioModel: {usuario_id}")
                 self.operacionError.emit("ID de usuario inválido")
@@ -673,11 +678,16 @@ class LaboratorioModel(QObject):
     
     @Slot()
     def refrescarDatos(self):
-        """Refresca todos los datos del modelo"""
+        """Refresca todos los datos del modelo - CON VERIFICACIÓN DE AUTENTICACIÓN"""
         try:
+            # ✅ NUEVO: Verificar si el usuario está autenticado antes de cargar
+            if self._usuario_actual_id <= 0:
+                print("⚠️ LaboratorioModel: Usuario no autenticado aún, esperando autenticación...")
+                return  # Salir silenciosamente, sin error
+            
             self._set_estado_actual("cargando")
             
-            #print("🔄 Refrescando todos los datos del modelo...")
+            print(f"🔄 Usuario {self._usuario_actual_id} - Refrescando todos los datos del modelo...")
             
             self.cargarTiposAnalisis()
             self.cargarTrabajadores()
