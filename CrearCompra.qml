@@ -129,6 +129,30 @@ Item {
             contadorClics = 0
         }
     }
+    Timer {
+        id: retryProveedorTimer
+        interval: 500
+        repeat: true
+        onTriggered: {
+            if (modoEdicion && newPurchaseProvider && providerCombo) {
+                var index = providerCombo.find(newPurchaseProvider)
+                if (index !== -1) {
+                    providerCombo.currentIndex = index
+                    console.log("✅ Proveedor seleccionado después de retry:", index)
+                    retryProveedorTimer.stop()
+                } else if (retryCount < 3) {
+                    retryCount++
+                    console.log("🔄 Reintentando selección de proveedor...", retryCount)
+                } else {
+                    console.log("⚠️ No se pudo encontrar el proveedor después de 3 intentos")
+                    retryProveedorTimer.stop()
+                }
+            } else {
+                retryProveedorTimer.stop()
+            }
+        }
+        property int retryCount: 0
+    }
     
     // ============================================================================
     // FUNCIONES PRINCIPALES
@@ -633,6 +657,15 @@ Item {
                                         border.color: darkGrayColor
                                         border.width: 1
                                         radius: 6
+                                    }
+
+                                    function find(text) {
+                                        for (var i = 0; i < model.length; i++) {
+                                            if (model[i] === text) {
+                                                return i
+                                            }
+                                        }
+                                        return -1
                                     }
                                     
                                     onCurrentTextChanged: {
@@ -1596,22 +1629,39 @@ Item {
         // Configurar fecha actual
         var fecha = new Date()
         newPurchaseDate = fecha.getDate().toString().padStart(2, '0') + "/" +
-                         (fecha.getMonth() + 1).toString().padStart(2, '0') + "/" +
-                         fecha.getFullYear()
+                        (fecha.getMonth() + 1).toString().padStart(2, '0') + "/" +
+                        fecha.getFullYear()
         
         if (!modoEdicion && compraModel) {
             newPurchaseId = "C" + String((compraModel.total_compras_mes || 0) + 1).padStart(3, '0')
         }
         
         // Cargar proveedores
-        Qt.callLater(function() {
-            if (compraModel) {
-                compraModel.force_refresh_proveedores()
+        if (compraModel) {
+            compraModel.force_refresh_proveedores()
+            
+            // Si estamos en modo edición, cargar datos después de un breve delay usando Timer
+            if (modoEdicion) {
+                // Crear un Timer para esperar a que se carguen los proveedores
+                var loadTimer = Qt.createQmlObject(`
+                    import QtQuick 2.15
+                    Timer {
+                        interval: 500
+                        running: true
+                        repeat: false
+                        onTriggered: {
+                            updateProviderNames()
+                            cargarDatosEdicion()
+                        }
+                    }
+                `, crearCompraRoot, "loadTimer")
+            } else {
+                // Para nueva compra, solo cargar proveedores
                 Qt.callLater(function() {
                     updateProviderNames()
-                }, 500)
+                })
             }
-        })
+        }
         
         // Conectar señal para crear producto
         crearCompraRoot.solicitarCrearProducto.connect(function(nombreProducto) {
@@ -1623,55 +1673,99 @@ Item {
     
     // FUNCIÓN AÑADIDA FALTANTE
     function updateProviderNames() {
+        console.log("🔄 Actualizando lista de proveedores...")
+        
         var names = ["Seleccionar proveedor..."]
         if (compraModel && compraModel.proveedores) {
             var proveedores = compraModel.proveedores
+            console.log("   📋 Proveedores del modelo:", proveedores.length)
+            
             for (var i = 0; i < proveedores.length; i++) {
                 var provider = proveedores[i]
-                if (provider && (provider.Nombre || provider.nombre)) {
+                if (provider) {
                     var nombreProveedor = provider.Nombre || provider.nombre
-                    names.push(nombreProveedor)
+                    if (nombreProveedor) {
+                        names.push(nombreProveedor)
+                        console.log("     " + i + ": " + nombreProveedor)
+                    }
                 }
             }
         }
+        
         providerNames = names
+        console.log("   ✅ Lista de proveedores actualizada:", names.length, "items")
     }
     
     // FUNCIÓN AÑADIDA FALTANTE
     function cargarDatosEdicion() {
-        if (!modoEdicion || !compraModel) return
+        if (!modoEdicion || !compraModel) {
+            console.log("⚠️ No se puede cargar datos de edición - modoEdicion:", modoEdicion, "compraModel:", compraModel)
+            return
+        }
         
         console.log("📋 Cargando datos para edición - Compra:", compraIdEdicion)
+        console.log("   Datos originales completos:", JSON.stringify(datosOriginales))
         
         newPurchaseId = `C${String(compraIdEdicion).padStart(3, '0')}`
         
         var datosOrig = datosOriginales
-        if (datosOrig && datosOrig.proveedor) {
-            newPurchaseProvider = datosOrig.proveedor
+        if (datosOrig) {
+            // Intentar obtener el nombre del proveedor de diferentes formas
+            var nombreProveedor = datosOrig.Proveedor_Nombre || datosOrig.Proveedor || datosOrig.proveedor || ""
             
-            for (var i = 0; i < providerNames.length; i++) {
-                if (providerNames[i] === datosOrig.proveedor) {
-                    if (providerCombo) providerCombo.currentIndex = i
-                    break
+            console.log("   🔍 Proveedor extraído:", nombreProveedor)
+            
+            if (nombreProveedor) {
+                newPurchaseProvider = nombreProveedor
+                console.log("   ✅ Proveedor encontrado para edición:", newPurchaseProvider)
+                
+                // Intentar seleccionar el proveedor en el ComboBox
+                Qt.callLater(function() {
+                    if (providerCombo) {
+                        var index = providerCombo.find(newPurchaseProvider)
+                        if (index !== -1) {
+                            providerCombo.currentIndex = index
+                            console.log("   ✅ Proveedor seleccionado en índice:", index)
+                        } else {
+                            console.log("   ⚠️ Proveedor no encontrado en ComboBox:", newPurchaseProvider)
+                            console.log("   📋 Lista actual en ComboBox:", providerCombo.model)
+                            // Iniciar timer de reintento
+                            retryProveedorTimer.retryCount = 0
+                        retryProveedorTimer.start()
+                    }
+                } else {
+                    console.log("   ⚠️ providerCombo no está disponible aún")
                 }
-            }
+            })
+        } else {
+            console.log("   ⚠️ No se encontró el nombre del proveedor en datosOriginales")
+            console.log("   📋 Claves disponibles:", Object.keys(datosOrig))
         }
-        
-        if (datosOrig && datosOrig.fecha) {
-            try {
-                var fechaStr = datosOrig.fecha.toString()
-                if (fechaStr && fechaStr.length > 0) newPurchaseDate = fechaStr
-            } catch (e) {
-                console.log("⚠️ Error al convertir fecha:", e)
-                var fechaActual = new Date()
-                var dia = fechaActual.getDate().toString().padStart(2, '0')
-                var mes = (fechaActual.getMonth() + 1).toString().padStart(2, '0')
-                var año = fechaActual.getFullYear()
-                newPurchaseDate = dia + "/" + mes + "/" + año
-            }
-        }
-        
-        updatePurchaseTotal()
-        showSuccess("Compra cargada para edición")
+    } else {
+        console.log("   ⚠️ datosOriginales está vacío o no definido")
     }
+    
+    // Cargar fecha
+    if (datosOrig && datosOrig.fecha) {
+        try {
+            var fechaStr = datosOrig.fecha.toString()
+            if (fechaStr && fechaStr.length > 0) {
+                newPurchaseDate = fechaStr
+                console.log("   📅 Fecha cargada:", newPurchaseDate)
+            }
+        } catch (e) {
+            console.log("⚠️ Error al convertir fecha:", e)
+            var fechaActual = new Date()
+            var dia = fechaActual.getDate().toString().padStart(2, '0')
+            var mes = (fechaActual.getMonth() + 1).toString().padStart(2, '0')
+            var año = fechaActual.getFullYear()
+            newPurchaseDate = dia + "/" + mes + "/" + año
+        }
+    }
+    
+    updatePurchaseTotal()
+    showSuccess("Compra cargada para edición")
+    console.log("✅ Datos de edición cargados - Total:", newPurchaseTotal.toFixed(2))
+}
+    
 }
