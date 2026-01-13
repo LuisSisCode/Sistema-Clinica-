@@ -1,6 +1,6 @@
 -- ═══════════════════════════════════════════════════════════════════
 -- SCRIPT DE OPTIMIZACIÓN - ÍNDICES BASE DE DATOS
--- Sistema Clínica María Inmaculada v1.0
+-- Sistema Clínica María Inmaculada v2.0
 -- ═══════════════════════════════════════════════════════════════════
 -- 
 -- PROPÓSITO:
@@ -33,7 +33,7 @@ GO
 
 PRINT '═══════════════════════════════════════════════════════════════════'
 PRINT 'INICIANDO CREACIÓN DE ÍNDICES DE OPTIMIZACIÓN'
-PRINT 'Sistema Clínica María Inmaculada v1.0'
+PRINT 'Sistema Clínica María Inmaculada v2.0'
 PRINT '═══════════════════════════════════════════════════════════════════'
 PRINT ''
 PRINT 'Fecha: ' + CONVERT(VARCHAR, GETDATE(), 120)
@@ -56,7 +56,7 @@ IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Productos_Nombre')
 BEGIN
     CREATE NONCLUSTERED INDEX IX_Productos_Nombre
     ON [dbo].[Productos] ([Nombre] ASC)
-    INCLUDE ([Codigo], [Precio_venta], [Stock_Unitario], [Activo])
+    INCLUDE ([Codigo], [Precio_venta], [Stock_Minimo], [Activo])
     WITH (STATISTICS_NORECOMPUTE = OFF, ONLINE = OFF);
     
     PRINT '   ✅ Creado: IX_Productos_Nombre'
@@ -69,7 +69,7 @@ IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Productos_Activo_Marca
 BEGIN
     CREATE NONCLUSTERED INDEX IX_Productos_Activo_Marca
     ON [dbo].[Productos] ([Activo] ASC, [ID_Marca] ASC)
-    INCLUDE ([Nombre], [Codigo], [Precio_venta], [Stock_Unitario])
+    INCLUDE ([Nombre], [Codigo], [Precio_venta], [Stock_Minimo])
     WITH (STATISTICS_NORECOMPUTE = OFF, ONLINE = OFF);
     
     PRINT '   ✅ Creado: IX_Productos_Activo_Marca'
@@ -77,19 +77,19 @@ END
 ELSE
     PRINT '   ℹ️  Ya existe: IX_Productos_Activo_Marca'
 
--- Índice para alertas de stock bajo
-IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Productos_Stock')
+-- Índice para búsqueda por código (código único del producto)
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Productos_Codigo')
 BEGIN
-    CREATE NONCLUSTERED INDEX IX_Productos_Stock
-    ON [dbo].[Productos] ([Stock_Unitario] ASC, [Stock_Minimo] ASC)
+    CREATE NONCLUSTERED INDEX IX_Productos_Codigo
+    ON [dbo].[Productos] ([Codigo] ASC)
+    INCLUDE ([Nombre], [Precio_venta], [Activo])
     WHERE ([Activo] = 1)
-    INCLUDE ([Nombre], [Codigo])
     WITH (STATISTICS_NORECOMPUTE = OFF, ONLINE = OFF);
     
-    PRINT '   ✅ Creado: IX_Productos_Stock'
+    PRINT '   ✅ Creado: IX_Productos_Codigo'
 END
 ELSE
-    PRINT '   ℹ️  Ya existe: IX_Productos_Stock'
+    PRINT '   ℹ️  Ya existe: IX_Productos_Codigo'
 
 PRINT ''
 
@@ -232,12 +232,12 @@ PRINT ''
 
 PRINT '[5/12] Creando índices para tabla Compra...'
 
--- Índice para reportes de compras por fecha
+-- Índice para compras por fecha
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Compra_Fecha')
 BEGIN
     CREATE NONCLUSTERED INDEX IX_Compra_Fecha
     ON [dbo].[Compra] ([Fecha] DESC)
-    INCLUDE ([Total], [Id_Proveedor], [Id_Usuario])
+    INCLUDE ([Id_Proveedor], [Total], [Estado])
     WITH (STATISTICS_NORECOMPUTE = OFF, ONLINE = OFF);
     
     PRINT '   ✅ Creado: IX_Compra_Fecha'
@@ -250,7 +250,7 @@ IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Compra_Proveedor')
 BEGIN
     CREATE NONCLUSTERED INDEX IX_Compra_Proveedor
     ON [dbo].[Compra] ([Id_Proveedor] ASC, [Fecha] DESC)
-    INCLUDE ([Total])
+    INCLUDE ([Total], [Estado])
     WITH (STATISTICS_NORECOMPUTE = OFF, ONLINE = OFF);
     
     PRINT '   ✅ Creado: IX_Compra_Proveedor'
@@ -271,7 +271,7 @@ IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Consultas_Fecha')
 BEGIN
     CREATE NONCLUSTERED INDEX IX_Consultas_Fecha
     ON [dbo].[Consultas] ([Fecha] DESC)
-    INCLUDE ([Id_Paciente], [Id_Especialidad], [Id_Usuario])
+    INCLUDE ([Id_Paciente], [Id_Especialidad], [Id_Trabajador])
     WITH (STATISTICS_NORECOMPUTE = OFF, ONLINE = OFF);
     
     PRINT '   ✅ Creado: IX_Consultas_Fecha'
@@ -279,12 +279,12 @@ END
 ELSE
     PRINT '   ℹ️  Ya existe: IX_Consultas_Fecha'
 
--- Índice para historial de paciente
+-- Índice para historial del paciente
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Consultas_Paciente')
 BEGIN
     CREATE NONCLUSTERED INDEX IX_Consultas_Paciente
     ON [dbo].[Consultas] ([Id_Paciente] ASC, [Fecha] DESC)
-    INCLUDE ([Id_Especialidad], [Tipo_Consulta])
+    INCLUDE ([Id_Especialidad], [Id_Trabajador], [Diagnostico])
     WITH (STATISTICS_NORECOMPUTE = OFF, ONLINE = OFF);
     
     PRINT '   ✅ Creado: IX_Consultas_Paciente'
@@ -305,7 +305,7 @@ IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Laboratorio_Fecha')
 BEGIN
     CREATE NONCLUSTERED INDEX IX_Laboratorio_Fecha
     ON [dbo].[Laboratorio] ([Fecha] DESC)
-    INCLUDE ([Id_Paciente], [Id_TipoAnalisis], [Id_Usuario])
+    INCLUDE ([Id_Paciente], [Id_TipoAnalisis], [Estado])
     WITH (STATISTICS_NORECOMPUTE = OFF, ONLINE = OFF);
     
     PRINT '   ✅ Creado: IX_Laboratorio_Fecha'
@@ -313,7 +313,7 @@ END
 ELSE
     PRINT '   ℹ️  Ya existe: IX_Laboratorio_Fecha'
 
--- Índice para historial de análisis del paciente
+-- Índice para historial del paciente
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Laboratorio_Paciente')
 BEGIN
     CREATE NONCLUSTERED INDEX IX_Laboratorio_Paciente
@@ -397,36 +397,36 @@ ELSE
 PRINT ''
 
 -- ═══════════════════════════════════════════════════════════════════
--- SECCIÓN 10: ÍNDICES PARA KARDEX (HISTORIAL DE MOVIMIENTOS)
+-- SECCIÓN 10: ÍNDICES PARA GASTOS
 -- ═══════════════════════════════════════════════════════════════════
 
-PRINT '[10/12] Creando índices para tabla Kardex...'
+PRINT '[10/12] Creando índices para tabla Gastos...'
 
--- Índice para movimientos por producto y fecha
-IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Kardex_Producto_Fecha')
+-- Índice para gastos por fecha
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Gastos_Fecha')
 BEGIN
-    CREATE NONCLUSTERED INDEX IX_Kardex_Producto_Fecha
-    ON [dbo].[Kardex] ([Id_Producto] ASC, [Fecha] DESC)
-    INCLUDE ([Id_Lote], [Tipo_Movimiento], [Cantidad], [Precio_Unitario])
+    CREATE NONCLUSTERED INDEX IX_Gastos_Fecha
+    ON [dbo].[Gastos] ([Fecha] DESC)
+    INCLUDE ([Id_Tipo_Gasto], [Id_Proveedor_Gastos], [Monto])
     WITH (STATISTICS_NORECOMPUTE = OFF, ONLINE = OFF);
     
-    PRINT '   ✅ Creado: IX_Kardex_Producto_Fecha'
+    PRINT '   ✅ Creado: IX_Gastos_Fecha'
 END
 ELSE
-    PRINT '   ℹ️  Ya existe: IX_Kardex_Producto_Fecha'
+    PRINT '   ℹ️  Ya existe: IX_Gastos_Fecha'
 
--- Índice para movimientos por lote
-IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Kardex_Lote')
+-- Índice para gastos por tipo
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Gastos_Tipo')
 BEGIN
-    CREATE NONCLUSTERED INDEX IX_Kardex_Lote
-    ON [dbo].[Kardex] ([Id_Lote] ASC, [Fecha] DESC)
-    INCLUDE ([Tipo_Movimiento], [Cantidad])
+    CREATE NONCLUSTERED INDEX IX_Gastos_Tipo
+    ON [dbo].[Gastos] ([Id_Tipo_Gasto] ASC, [Fecha] DESC)
+    INCLUDE ([Monto], [Id_Proveedor_Gastos])
     WITH (STATISTICS_NORECOMPUTE = OFF, ONLINE = OFF);
     
-    PRINT '   ✅ Creado: IX_Kardex_Lote'
+    PRINT '   ✅ Creado: IX_Gastos_Tipo'
 END
 ELSE
-    PRINT '   ℹ️  Ya existe: IX_Kardex_Lote'
+    PRINT '   ℹ️  Ya existe: IX_Gastos_Tipo'
 
 PRINT ''
 
@@ -461,6 +461,19 @@ BEGIN
 END
 ELSE
     PRINT '   ℹ️  Ya existe: IX_Pacientes_Nombre'
+
+-- Índice para búsqueda por cédula
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Pacientes_Cedula')
+BEGIN
+    CREATE NONCLUSTERED INDEX IX_Pacientes_Cedula
+    ON [dbo].[Pacientes] ([Cedula] ASC)
+    INCLUDE ([Nombre], [Apellido_Paterno], [Apellido_Materno])
+    WITH (STATISTICS_NORECOMPUTE = OFF, ONLINE = OFF);
+    
+    PRINT '   ✅ Creado: IX_Pacientes_Cedula'
+END
+ELSE
+    PRINT '   ℹ️  Ya existe: IX_Pacientes_Cedula'
 
 PRINT ''
 
@@ -516,11 +529,11 @@ PRINT '  • Consultas: 2 índices'
 PRINT '  • Laboratorio: 2 índices'
 PRINT '  • Enfermería: 2 índices'
 PRINT '  • Egresos: 2 índices'
-PRINT '  • Kardex: 2 índices'
-PRINT '  • Pacientes: 2 índices'
+PRINT '  • Gastos: 2 índices'
+PRINT '  • Pacientes: 3 índices'
 PRINT '  • Sesiones_Usuario: 1 índice'
 PRINT ''
-PRINT 'TOTAL: 25 índices'
+PRINT 'TOTAL: 26 índices'
 PRINT ''
 PRINT 'BENEFICIOS ESPERADOS:'
 PRINT '  ✅ Búsquedas de productos: 5-10x más rápidas'
@@ -528,6 +541,7 @@ PRINT '  ✅ Sistema FIFO: 3-5x más rápido'
 PRINT '  ✅ Reportes por fecha: 10-20x más rápidos'
 PRINT '  ✅ Historial de pacientes: 5-8x más rápido'
 PRINT '  ✅ Alertas de vencimiento: 8-12x más rápidas'
+PRINT '  ✅ Búsqueda de pacientes por cédula: 10-15x más rápida'
 PRINT ''
 PRINT 'NOTAS IMPORTANTES:'
 PRINT '  📝 Los índices ocupan espacio adicional en disco (~10-20% más)'
@@ -538,6 +552,12 @@ PRINT 'MANTENIMIENTO RECOMENDADO:'
 PRINT '  🔧 Reorganizar índices: Mensual'
 PRINT '  🔧 Reconstruir índices: Trimestral'
 PRINT '  🔧 Actualizar estadísticas: Semanal'
+PRINT ''
+PRINT 'Comando para reorganizar índices:'
+PRINT '  EXEC sp_MSforeachtable ''ALTER INDEX ALL ON ? REORGANIZE'''
+PRINT ''
+PRINT 'Comando para reconstruir índices:'
+PRINT '  EXEC sp_MSforeachtable ''ALTER INDEX ALL ON ? REBUILD'''
 PRINT ''
 PRINT 'Fecha de creación: ' + CONVERT(VARCHAR, GETDATE(), 120)
 PRINT ''

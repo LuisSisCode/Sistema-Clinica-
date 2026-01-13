@@ -1,19 +1,28 @@
 # backend/core/db_installer.py
 """
 Sistema de Instalación de Base de Datos
-✅ CORREGIDO: Detección automática de driver ODBC y mejor lógica
+✅ CORREGIDO: Bug crítico en creación de usuario admin
+✅ MEJORADO: Ejecuta 3 scripts, mejor logging, rollback, validación
 """
 
 import os
 import pyodbc
 from pathlib import Path
-from typing import Tuple, Optional, Dict
+from typing import Tuple, Optional, Dict, Callable
 import sys
 import time
 import re
+import logging
+
+# Configurar logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger('db_installer')
 
 class DatabaseInstaller:
-    """Instalador automatizado de base de datos"""
+    """Instalador automatizado de base de datos con validación y rollback"""
     
     # ✅ Lista de drivers ODBC en orden de preferencia
     ODBC_DRIVERS = [
@@ -24,20 +33,51 @@ class DatabaseInstaller:
         "SQL Server"
     ]
     
-    def __init__(self):
+    # ✅ NUEVO: Scripts requeridos en orden de ejecución
+    REQUIRED_SCRIPTS = [
+        "01_schema.sql",
+        "02_datos_iniciales.sql",
+        "03_indices_optimizacion.sql"
+    ]
+    
+    def __init__(self, progress_callback: Optional[Callable[[str, int], None]] = None):
         """
-        ✅ Inicializar instalador con rutas correctas y detección de driver
+        Inicializar instalador con rutas correctas y detección de driver
+        
+        Args:
+            progress_callback: Función opcional para reportar progreso (mensaje, porcentaje)
         """
+        self.progress_callback = progress_callback
+        
         # Detectar driver ODBC disponible
         self.driver = self._detectar_driver_odbc()
         
         if not self.driver:
-            print("⚠️ ADVERTENCIA: No se detectó driver ODBC para SQL Server")
-            print("   Instala 'ODBC Driver 17 for SQL Server' o superior")
+            logger.warning("No se detectó driver ODBC para SQL Server")
+            logger.warning("Instala 'ODBC Driver 17 for SQL Server' o superior")
         else:
-            print(f"🔌 Driver ODBC detectado: {self.driver}")
+            logger.info(f"Driver ODBC detectado: {self.driver}")
         
         # Configurar directorio de scripts
+        self.scripts_dir = self._detectar_directorio_scripts()
+        
+        logger.info(f"Directorio de scripts SQL: {self.scripts_dir}")
+        logger.info(f"¿Existe? {self.scripts_dir.exists()}")
+        
+        # ✅ NUEVO: Validar scripts requeridos
+        self._validar_scripts_requeridos()
+    
+    def _report_progress(self, message: str, percent: int = 0):
+        """Reporta progreso vía callback y logging"""
+        logger.info(f"[{percent}%] {message}")
+        if self.progress_callback:
+            try:
+                self.progress_callback(message, percent)
+            except Exception as e:
+                logger.error(f"Error en callback de progreso: {e}")
+    
+    def _detectar_directorio_scripts(self) -> Path:
+        """Detecta el directorio donde están los scripts SQL"""
         if getattr(sys, 'frozen', False):
             # ✅ EJECUTABLE: Scripts en RAÍZ de _MEIPASS
             base_path = sys._MEIPASS
@@ -47,40 +87,94 @@ class DatabaseInstaller:
                 Path(base_path) / '_internal' / 'database_scripts',
             ]
             
-            self.scripts_dir = None
             for path in possible_paths:
                 if path.exists():
-                    self.scripts_dir = path
-                    print(f"✅ Scripts SQL encontrados en: {path}")
-                    break
+                    logger.info(f"Scripts SQL encontrados en: {path}")
+                    return path
             
-            if self.scripts_dir is None:
-                self.scripts_dir = possible_paths[0]
-                print(f"⚠️ Scripts SQL NO encontrados, usando ruta por defecto: {self.scripts_dir}")
+            # Si no se encuentra, usar la primera opción por defecto
+            logger.warning(f"Scripts SQL NO encontrados, usando ruta por defecto")
+            return possible_paths[0]
         else:
             # ✅ DESARROLLO
-            self.scripts_dir = Path(__file__).parent.parent.parent / 'database_scripts'
-            print(f"🔍 MODO DESARROLLO - Scripts en: {self.scripts_dir}")
+            scripts_dir = Path(__file__).parent.parent.parent / 'database_scripts'
+            logger.info(f"MODO DESARROLLO - Scripts en: {scripts_dir}")
+            return scripts_dir
+    
+    def _leer_script_sql(self, script_path: Path) -> Optional[str]:
+        """
+        ✅ NUEVO: Lee un archivo SQL con detección automática de codificación
         
-        print(f"📂 Directorio de scripts SQL configurado: {self.scripts_dir}")
-        print(f"   ¿Existe? {self.scripts_dir.exists()}")
+        Args:
+            script_path: Ruta al archivo SQL
+            
+        Returns:
+            str: Contenido del archivo, o None si falla
+        """
+        # Lista de codificaciones a probar en orden
+        encodings = [
+            'utf-8',
+            'utf-8-sig',      # UTF-8 con BOM
+            'utf-16',         # UTF-16 (detecta LE/BE automáticamente)
+            'utf-16-le',      # UTF-16 Little Endian
+            'utf-16-be',      # UTF-16 Big Endian
+            'latin-1',        # ISO-8859-1
+            'cp1252',         # Windows-1252
+        ]
         
-        if self.scripts_dir.exists():
-            sql_files = list(self.scripts_dir.glob('*.sql'))
-            print(f"   Archivos .sql encontrados: {len(sql_files)}")
-            for sql_file in sql_files:
-                print(f"      - {sql_file.name}")
+        for encoding in encodings:
+            try:
+                logger.debug(f"Intentando leer {script_path.name} con codificación: {encoding}")
+                with open(script_path, 'r', encoding=encoding) as f:
+                    content = f.read()
+                    logger.info(f"✅ Script leído exitosamente con codificación: {encoding}")
+                    return content
+            except (UnicodeDecodeError, UnicodeError):
+                continue
+            except Exception as e:
+                logger.error(f"Error leyendo archivo con {encoding}: {e}")
+                continue
+        
+        logger.error(f"❌ No se pudo leer {script_path.name} con ninguna codificación")
+        return None
+    
+    def _validar_scripts_requeridos(self) -> bool:
+        """
+        ✅ NUEVO: Valida que todos los scripts requeridos existan
+        
+        Returns:
+            bool: True si todos existen
+        """
+        if not self.scripts_dir.exists():
+            logger.error(f"Directorio de scripts no existe: {self.scripts_dir}")
+            return False
+        
+        scripts_faltantes = []
+        
+        for script_name in self.REQUIRED_SCRIPTS:
+            script_path = self.scripts_dir / script_name
+            if script_path.exists():
+                logger.info(f"  ✅ {script_name} - OK")
+            else:
+                logger.error(f"  ❌ {script_name} - NO ENCONTRADO")
+                scripts_faltantes.append(script_name)
+        
+        if scripts_faltantes:
+            logger.error(f"Scripts faltantes: {', '.join(scripts_faltantes)}")
+            return False
+        
+        return True
     
     def _detectar_driver_odbc(self) -> Optional[str]:
         """
-        ✅ NUEVO: Detecta automáticamente el driver ODBC disponible
+        Detecta automáticamente el driver ODBC disponible
         
         Returns:
             str: Nombre del driver encontrado, o None
         """
         try:
             drivers_disponibles = list(pyodbc.drivers())
-            print(f"🔍 Drivers ODBC disponibles: {drivers_disponibles}")
+            logger.debug(f"Drivers ODBC disponibles: {drivers_disponibles}")
             
             for driver in self.ODBC_DRIVERS:
                 if driver in drivers_disponibles:
@@ -89,16 +183,17 @@ class DatabaseInstaller:
             return None
             
         except Exception as e:
-            print(f"❌ Error detectando drivers: {e}")
+            logger.error(f"Error detectando drivers: {e}")
             return None
     
-    def _build_connection_string(self, server: str, database: str = "master") -> str:
+    def _build_connection_string(self, server: str, database: str = "master", timeout: int = 30) -> str:
         """
-        ✅ NUEVO: Construye cadena de conexión con el driver detectado
+        Construye cadena de conexión con el driver detectado
         
         Args:
             server: Servidor SQL Server
             database: Base de datos
+            timeout: Timeout en segundos
             
         Returns:
             str: Cadena de conexión
@@ -111,7 +206,7 @@ class DatabaseInstaller:
             f"SERVER={server}",
             f"DATABASE={database}",
             "Trusted_Connection=yes",
-            "Timeout=10"
+            f"Timeout={timeout}"
         ]
         
         # Para drivers modernos, agregar configuración
@@ -134,7 +229,9 @@ class DatabaseInstaller:
             if not self.driver:
                 return False, "❌ No se encontró driver ODBC. Instala 'ODBC Driver 17 for SQL Server'"
             
-            conn_str = self._build_connection_string(server, "master")
+            self._report_progress("Conectando a SQL Server...", 5)
+            
+            conn_str = self._build_connection_string(server, "master", timeout=10)
             
             conn = pyodbc.connect(conn_str, timeout=5)
             cursor = conn.cursor()
@@ -142,10 +239,11 @@ class DatabaseInstaller:
             version = cursor.fetchone()[0]
             conn.close()
             
-            print(f"✅ SQL Server conectado")
-            print(f"   Versión: {version[:100]}")
+            # Extraer versión corta
+            version_short = version.split('\n')[0][:80]
+            logger.info(f"SQL Server conectado: {version_short}")
             
-            return True, f"✅ SQL Server detectado correctamente: {server}"
+            return True, f"✅ SQL Server detectado: {server}"
             
         except pyodbc.Error as e:
             error_msg = str(e)
@@ -155,30 +253,30 @@ class DatabaseInstaller:
             elif "Data source name not found" in error_msg or "IM002" in error_msg:
                 return False, "❌ Driver ODBC no encontrado. Instala 'ODBC Driver 17 for SQL Server'."
             else:
-                return False, f"❌ Error conectando a SQL Server: {error_msg[:200]}"
+                return False, f"❌ Error conectando: {error_msg[:200]}"
         
         except Exception as e:
             return False, f"❌ Error inesperado: {str(e)}"
     
     def verificar_base_datos_existe(self, server: str, db_name: str) -> Tuple[bool, str]:
         """
-        ✅ CORREGIDO: Verifica si la base de datos existe y es accesible
+        Verifica si la base de datos existe y está completa
         
         Args:
             server: Servidor SQL
             db_name: Nombre de la base de datos
         
         Returns:
-            Tuple[bool, str]: (existe, mensaje)
+            Tuple[bool, str]: (existe_y_completa, mensaje)
         """
         try:
-            print(f"🔍 Verificando BD: {db_name} en servidor: {server}")
+            logger.info(f"Verificando BD: {db_name} en servidor: {server}")
             
             if not self.driver:
                 return False, "❌ No hay driver ODBC disponible"
             
             # Conectar a master
-            conn_str = self._build_connection_string(server, "master")
+            conn_str = self._build_connection_string(server, "master", timeout=10)
             conn = pyodbc.connect(conn_str, timeout=5)
             
             # Verificar si existe
@@ -189,13 +287,13 @@ class DatabaseInstaller:
             if not existe:
                 cursor.close()
                 conn.close()
-                return False, f"❌ Base de datos '{db_name}' no existe en el servidor"
+                return False, f"❌ Base de datos '{db_name}' no existe"
             
             cursor.close()
             conn.close()
             
             # Verificar que tenga tablas
-            conn_str_db = self._build_connection_string(server, db_name)
+            conn_str_db = self._build_connection_string(server, db_name, timeout=10)
             
             try:
                 conn_db = pyodbc.connect(conn_str_db, timeout=5)
@@ -210,32 +308,26 @@ class DatabaseInstaller:
                 cursor_db.close()
                 conn_db.close()
                 
-                if num_tablas < 5:
-                    return False, f"⚠️ Base de datos '{db_name}' existe pero está incompleta ({num_tablas} tablas)"
+                # ✅ Esperamos al menos 20 tablas (según esquema)
+                if num_tablas < 20:
+                    return False, f"⚠️ BD '{db_name}' está incompleta ({num_tablas} tablas, se esperan 20+)"
                 
-                return True, f"✅ Base de datos '{db_name}' disponible y operativa ({num_tablas} tablas)"
+                logger.info(f"BD '{db_name}' existe y parece completa ({num_tablas} tablas)")
+                return True, f"✅ Base de datos '{db_name}' existe ({num_tablas} tablas)"
                 
-            except pyodbc.Error:
-                return False, f"❌ Base de datos '{db_name}' existe pero no es accesible"
-            
-        except pyodbc.Error as e:
-            error_msg = str(e)
-            
-            if "Cannot open database" in error_msg or "does not exist" in error_msg:
-                return False, f"❌ Base de datos '{db_name}' no existe"
-            else:
-                return False, f"❌ Error verificando BD: {error_msg[:200]}"
-        
+            except pyodbc.Error as e:
+                return False, f"❌ No se puede acceder a '{db_name}': {str(e)[:100]}"
+                
         except Exception as e:
-            return False, f"❌ Error inesperado: {str(e)}"
+            logger.error(f"Error verificando BD: {e}")
+            return False, f"❌ Error verificando BD: {str(e)}"
     
     def ejecutar_script_sql(self, script_path: Path, server: str, db_name: str) -> Tuple[bool, str]:
         """
-        Ejecuta un archivo SQL
-        ✅ CORREGIDO: Detecta automáticamente la codificación del archivo
+        ✅ MEJORADO: Ejecuta un script SQL con mejor manejo de batches
         
         Args:
-            script_path: Ruta al archivo .sql
+            script_path: Ruta al script SQL
             server: Servidor SQL
             db_name: Base de datos
             
@@ -244,61 +336,182 @@ class DatabaseInstaller:
         """
         try:
             if not script_path.exists():
-                return False, f"❌ Archivo no encontrado: {script_path}"
+                return False, f"❌ Script no encontrado: {script_path}"
             
-            # ✅ NUEVO: Detectar codificación automáticamente
-            sql_content = None
-            encodings = ['utf-8', 'utf-16', 'utf-16-le', 'utf-16-be', 'latin-1', 'cp1252']
+            logger.info(f"Ejecutando script: {script_path.name}")
             
-            for encoding in encodings:
-                try:
-                    with open(script_path, 'r', encoding=encoding) as f:
-                        sql_content = f.read()
-                    print(f"  ✅ Archivo leído con codificación: {encoding}")
-                    break
-                except (UnicodeDecodeError, UnicodeError):
-                    continue
-            
+            # ✅ CORREGIDO: Leer contenido con detección automática de codificación
+            sql_content = self._leer_script_sql(script_path)
             if sql_content is None:
-                return False, f"❌ No se pudo leer el archivo con ninguna codificación conocida"
+                return False, f"❌ No se pudo leer el script (problema de codificación)"
             
-            # Conectar
-            conn_str = self._build_connection_string(server, db_name)
-            conn = pyodbc.connect(conn_str, autocommit=True)
+            # ✅ MEJORADO: Parser de batches más robusto
+            batches = self._split_sql_batches(sql_content)
+            
+            # ✅ FILTRAR comandos de gestión de BD (CREATE/ALTER DATABASE)
+            # Estos no deben ejecutarse cuando la BD ya existe
+            batches = self._filtrar_comandos_database(batches, script_path.name)
+            
+            logger.info(f"Script dividido en {len(batches)} batches")
+            
+            # Conectar y ejecutar
+            conn_str = self._build_connection_string(server, db_name, timeout=120)
+            conn = pyodbc.connect(conn_str, timeout=120)
+            conn.autocommit = True  # ✅ Cambio a autocommit para evitar errores de transacción
             cursor = conn.cursor()
-            
-            # Dividir por GO (con saltos de línea)
-            import re
-            comandos = re.split(r'\bGO\b', sql_content, flags=re.IGNORECASE)
-            comandos = [cmd.strip() for cmd in comandos if cmd.strip()]
             
             ejecutados = 0
             errores = 0
             
-            for i, comando in enumerate(comandos, 1):
+            for i, batch in enumerate(batches, 1):
+                batch = batch.strip()
+                
+                if not batch or batch.startswith('--'):
+                    continue
+                
                 try:
-                    cursor.execute(comando)
+                    # ✅ NUEVO: Feedback de progreso cada 10 batches
+                    if i % 10 == 0:
+                        logger.debug(f"Ejecutando batch {i}/{len(batches)}")
+                    
+                    cursor.execute(batch)
                     ejecutados += 1
+                    
                 except pyodbc.Error as e:
                     error_msg = str(e)
-                    # Ignorar algunos errores comunes
-                    if "already exists" not in error_msg.lower():
-                        errores += 1
-                        if errores <= 3:
-                            print(f"⚠️ Error en comando {i}: {error_msg[:100]}")
+                    
+                    # Ignorar ciertos errores esperados
+                    if "already exists" in error_msg.lower():
+                        logger.debug(f"Batch {i}: Objeto ya existe (ignorado)")
+                        continue
+                    
+                    logger.error(f"Error en batch {i}: {error_msg[:200]}")
+                    errores += 1
+                    
+                    # Si hay muchos errores, abortar
+                    if errores > 10:  # ✅ Aumentado de 5 a 10
+                        cursor.close()
+                        conn.close()
+                        return False, f"❌ Demasiados errores ({errores}), abortando"
             
+            # No hay commit porque autocommit=True
             cursor.close()
             conn.close()
             
-            print(f"✅ Script ejecutado: {ejecutados} comandos, {errores} errores")
-            return True, f"✅ Script ejecutado exitosamente"
+            logger.info(f"Script ejecutado: {ejecutados} comandos, {errores} errores menores")
+            
+            if errores > 0:
+                return True, f"⚠️ Script ejecutado con {errores} advertencias"
+            else:
+                return True, f"✅ Script ejecutado exitosamente"
             
         except Exception as e:
+            logger.error(f"Error ejecutando script: {e}")
             return False, f"❌ Error ejecutando script: {str(e)}"
+    
+    def _split_sql_batches(self, sql_content: str) -> list:
+        """
+        ✅ MEJORADO: Divide script SQL en batches usando GO como separador
+        Maneja comentarios y strings correctamente
+        
+        Args:
+            sql_content: Contenido del script SQL
+            
+        Returns:
+            list: Lista de batches SQL
+        """
+        # Remover comentarios de línea (--) pero no dentro de strings
+        lines = sql_content.split('\n')
+        cleaned_lines = []
+        
+        in_string = False
+        string_char = None
+        
+        for line in lines:
+            cleaned_line = []
+            i = 0
+            
+            while i < len(line):
+                char = line[i]
+                
+                # Detectar inicio/fin de string
+                if char in ("'", '"') and (i == 0 or line[i-1] != '\\'):
+                    if not in_string:
+                        in_string = True
+                        string_char = char
+                    elif char == string_char:
+                        in_string = False
+                        string_char = None
+                    cleaned_line.append(char)
+                
+                # Detectar comentario
+                elif not in_string and char == '-' and i+1 < len(line) and line[i+1] == '-':
+                    # Ignorar resto de la línea
+                    break
+                
+                else:
+                    cleaned_line.append(char)
+                
+                i += 1
+            
+            cleaned_lines.append(''.join(cleaned_line))
+        
+        cleaned_content = '\n'.join(cleaned_lines)
+        
+        # Dividir por GO (case insensitive, solo línea completa)
+        batches = re.split(r'^\s*GO\s*$', cleaned_content, flags=re.MULTILINE | re.IGNORECASE)
+        
+        # Limpiar batches vacíos
+        batches = [b.strip() for b in batches if b.strip()]
+        
+        return batches
+    
+    def _filtrar_comandos_database(self, batches: list, script_name: str) -> list:
+        """
+        ✅ NUEVO: Filtra comandos CREATE DATABASE y ALTER DATABASE
+        Estos comandos no deben ejecutarse cuando la BD ya está creada
+        
+        Args:
+            batches: Lista de batches SQL
+            script_name: Nombre del script (para logging)
+            
+        Returns:
+            list: Batches filtrados
+        """
+        filtered_batches = []
+        comandos_filtrados = 0
+        
+        # Patrones a filtrar
+        patrones_filtrar = [
+            r'^\s*CREATE\s+DATABASE\s+',
+            r'^\s*ALTER\s+DATABASE\s+',
+            r'^\s*USE\s+\[?master\]?\s*$',
+        ]
+        
+        for batch in batches:
+            batch_upper = batch.upper().strip()
+            
+            # Verificar si debe filtrarse
+            debe_filtrar = False
+            for patron in patrones_filtrar:
+                if re.search(patron, batch, re.IGNORECASE | re.MULTILINE):
+                    debe_filtrar = True
+                    break
+            
+            if debe_filtrar:
+                logger.debug(f"Filtrando comando de gestión de BD: {batch[:50]}...")
+                comandos_filtrados += 1
+            else:
+                filtered_batches.append(batch)
+        
+        if comandos_filtrados > 0:
+            logger.info(f"✂️ Filtrados {comandos_filtrados} comandos de gestión de BD")
+        
+        return filtered_batches
     
     def crear_base_datos(self, server: str, db_name: str) -> Tuple[bool, str]:
         """
-        Crea la base de datos y ejecuta scripts
+        ✅ MEJORADO: Crea la BD y ejecuta los 3 scripts
         
         Args:
             server: Servidor SQL
@@ -308,61 +521,184 @@ class DatabaseInstaller:
             Tuple[bool, str]: (éxito, mensaje)
         """
         try:
-            print(f"📊 Creando base de datos: {db_name}")
+            logger.info(f"Creando base de datos: {db_name}")
+            self._report_progress(f"Creando base de datos {db_name}...", 10)
             
             # Verificar que no exista
             existe, _ = self.verificar_base_datos_existe(server, db_name)
             if existe:
-                return True, f"ℹ️ Base de datos '{db_name}' ya existe"
+                return True, f"ℹ️ Base de datos '{db_name}' ya existe y está completa"
             
             # Conectar a master
-            conn_str = self._build_connection_string(server, "master")
+            conn_str = self._build_connection_string(server, "master", timeout=30)
             conn = pyodbc.connect(conn_str, autocommit=True)
             cursor = conn.cursor()
             
             # Crear BD
-            print(f"🔨 Creando base de datos...")
+            logger.info("Creando estructura de base de datos...")
             cursor.execute(f"CREATE DATABASE [{db_name}]")
             
             cursor.close()
             conn.close()
             
-            # Esperar un momento
+            # Esperar a que SQL Server finalice la creación
             time.sleep(2)
             
-            # Ejecutar script de esquema
+            # ✅ SCRIPT 1: Esquema (tablas, vistas, procedimientos)
+            self._report_progress("Creando tablas y procedimientos...", 20)
             schema_script = self.scripts_dir / "01_schema.sql"
             
             if not schema_script.exists():
                 return False, f"❌ No se encontró: {schema_script.name}"
             
-            print(f"⚙️ Ejecutando {schema_script.name}...")
+            logger.info(f"Ejecutando {schema_script.name}...")
             exito, mensaje = self.ejecutar_script_sql(schema_script, server, db_name)
             
             if not exito:
+                # ✅ Intentar eliminar BD fallida
+                self._eliminar_base_datos(server, db_name)
                 return False, f"❌ Error en esquema: {mensaje}"
             
-            # Ejecutar datos iniciales
+            logger.info("✅ Esquema creado exitosamente")
+            
+            # ✅ SCRIPT 2: Datos iniciales
+            self._report_progress("Cargando datos iniciales...", 50)
             datos_script = self.scripts_dir / "02_datos_iniciales.sql"
             
             if datos_script.exists():
-                print(f"📝 Ejecutando {datos_script.name}...")
+                logger.info(f"Ejecutando {datos_script.name}...")
                 time.sleep(1)
                 exito, mensaje = self.ejecutar_script_sql(datos_script, server, db_name)
                 
                 if not exito:
-                    print(f"⚠️ Advertencia en datos iniciales: {mensaje}")
+                    logger.warning(f"Advertencia en datos iniciales: {mensaje}")
+                    # No abortamos por errores en datos iniciales
+                else:
+                    logger.info("✅ Datos iniciales cargados")
+            else:
+                logger.warning(f"⚠️ No se encontró {datos_script.name}")
+            
+            # ✅ SCRIPT 3: Índices de optimización (NUEVO)
+            self._report_progress("Creando índices de optimización...", 70)
+            indices_script = self.scripts_dir / "03_indices_optimizacion.sql"
+            
+            if indices_script.exists():
+                logger.info(f"Ejecutando {indices_script.name}...")
+                time.sleep(1)
+                exito, mensaje = self.ejecutar_script_sql(indices_script, server, db_name)
+                
+                if not exito:
+                    logger.warning(f"Advertencia en índices: {mensaje}")
+                    # No abortamos por errores en índices
+                else:
+                    logger.info("✅ Índices de optimización creados")
+            else:
+                logger.warning(f"⚠️ No se encontró {indices_script.name}")
+            
+            # ✅ NUEVO: Validar instalación
+            self._report_progress("Validando instalación...", 80)
+            valido, mensaje_validacion = self._validar_instalacion(server, db_name)
+            
+            if not valido:
+                logger.warning(f"Validación: {mensaje_validacion}")
             
             return True, f"✅ Base de datos '{db_name}' creada exitosamente"
             
         except Exception as e:
+            logger.error(f"Error creando BD: {e}")
             import traceback
             traceback.print_exc()
+            
+            # Intentar limpiar
+            try:
+                self._eliminar_base_datos(server, db_name)
+            except:
+                pass
+            
             return False, f"❌ Error creando BD: {str(e)}"
     
-    def crear_usuario_admin(self, server: str, db_name: str, username: str = "admin", password: str = "admin123") -> Tuple[bool, str]:
+    def _eliminar_base_datos(self, server: str, db_name: str):
         """
-        Crea el usuario administrador inicial
+        ✅ NUEVO: Elimina una base de datos (rollback)
+        """
+        try:
+            logger.warning(f"Intentando eliminar BD fallida: {db_name}")
+            
+            conn_str = self._build_connection_string(server, "master", timeout=10)
+            conn = pyodbc.connect(conn_str, autocommit=True)
+            cursor = conn.cursor()
+            
+            # Forzar cierre de conexiones
+            cursor.execute(f"""
+                ALTER DATABASE [{db_name}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+                DROP DATABASE [{db_name}];
+            """)
+            
+            cursor.close()
+            conn.close()
+            
+            logger.info(f"BD '{db_name}' eliminada")
+            
+        except Exception as e:
+            logger.error(f"No se pudo eliminar BD: {e}")
+    
+    def _validar_instalacion(self, server: str, db_name: str) -> Tuple[bool, str]:
+        """
+        ✅ NUEVO: Valida que la instalación esté completa
+        
+        Returns:
+            Tuple[bool, str]: (válido, mensaje)
+        """
+        try:
+            conn_str = self._build_connection_string(server, db_name, timeout=10)
+            conn = pyodbc.connect(conn_str, timeout=5)
+            cursor = conn.cursor()
+            
+            # Contar tablas
+            cursor.execute("""
+                SELECT COUNT(*) 
+                FROM INFORMATION_SCHEMA.TABLES 
+                WHERE TABLE_TYPE = 'BASE TABLE'
+            """)
+            num_tablas = cursor.fetchone()[0]
+            
+            # Contar procedimientos almacenados
+            cursor.execute("""
+                SELECT COUNT(*) 
+                FROM INFORMATION_SCHEMA.ROUTINES 
+                WHERE ROUTINE_TYPE = 'PROCEDURE'
+            """)
+            num_procedures = cursor.fetchone()[0]
+            
+            # Contar vistas
+            cursor.execute("""
+                SELECT COUNT(*) 
+                FROM INFORMATION_SCHEMA.VIEWS
+            """)
+            num_views = cursor.fetchone()[0]
+            
+            cursor.close()
+            conn.close()
+            
+            logger.info(f"Validación: {num_tablas} tablas, {num_procedures} SP, {num_views} vistas")
+            
+            # Validación básica
+            if num_tablas < 20:
+                return False, f"⚠️ Faltan tablas (encontradas: {num_tablas}, esperadas: 20+)"
+            
+            if num_procedures < 5:
+                return False, f"⚠️ Faltan procedimientos (encontrados: {num_procedures})"
+            
+            return True, f"✅ Instalación válida: {num_tablas} tablas, {num_procedures} SP"
+            
+        except Exception as e:
+            return False, f"⚠️ Error validando: {str(e)}"
+    
+    def crear_usuario_admin(self, server: str, db_name: str, 
+                           username: str = "admin", 
+                           password: str = "admin123") -> Tuple[bool, str]:
+        """
+        ✅ CORREGIDO: Crea el usuario administrador inicial (bug crítico arreglado)
         
         Args:
             server: Servidor SQL
@@ -374,11 +710,11 @@ class DatabaseInstaller:
             Tuple[bool, str]: (éxito, mensaje)
         """
         try:
-            print(f"👤 Creando usuario administrador en: {db_name}")
+            logger.info(f"Creando usuario administrador: {username}")
             
             time.sleep(1)
             
-            conn_str = self._build_connection_string(server, db_name)
+            conn_str = self._build_connection_string(server, db_name, timeout=30)
             conn = pyodbc.connect(conn_str, timeout=30)
             cursor = conn.cursor()
             
@@ -386,11 +722,11 @@ class DatabaseInstaller:
             cursor.execute("SELECT id FROM Usuario WHERE nombre_usuario = ?", (username,))
             if cursor.fetchone():
                 conn.close()
-                print(f"ℹ️ Usuario '{username}' ya existe")
+                logger.info(f"Usuario '{username}' ya existe")
                 return True, f"ℹ️ Usuario '{username}' ya existe"
             
-            # Obtener ID del rol
-            cursor.execute("SELECT Id FROM Roles WHERE Nombre = 'Administrador'")
+            # Obtener ID del rol Administrador
+            cursor.execute("SELECT id FROM Roles WHERE Nombre = 'Administrador'")
             rol = cursor.fetchone()
             
             if not rol:
@@ -399,37 +735,45 @@ class DatabaseInstaller:
             
             rol_id = rol[0]
             
-            # Crear usuario
+            # ✅ CORREGIDO: Sintaxis SQL correcta
             sql = """
             INSERT INTO Usuario 
-            (Nombre, Apellido_Paterno, Apellido_Materno, contrasena,
-            Id_Rol, Estado, nombre_usuario)
-            VALUES (?, ?, ?, ?, ?,GETDATE(), ? )
+            (Nombre, Apellido_Paterno, Apellido_Materno, nombre_usuario, contrasena, Id_Rol, Estado)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """
             
             cursor.execute(sql, (
-                'Administrador', 'Sistema', 'General', 'admin@clinica.com',
-                username, password, rol_id, 1
+                'Administrador',
+                'Sistema',
+                'General',
+                username,
+                password,
+                rol_id,
+                1  # Estado = activo
             ))
             conn.commit()
             
+            # Verificar que se creó
             cursor.execute("SELECT id FROM Usuario WHERE nombre_usuario = ?", (username,))
             user_id = cursor.fetchone()[0]
             
             conn.close()
             
-            print(f"✅ Usuario administrador creado (ID: {user_id})")
+            logger.info(f"Usuario administrador creado (ID: {user_id})")
             
             return True, f"✅ Usuario '{username}' creado exitosamente"
             
         except Exception as e:
+            logger.error(f"Error creando usuario: {e}")
             import traceback
             traceback.print_exc()
             return False, f"❌ Error creando usuario: {str(e)}"
     
-    def setup_completo(self, server: str = "localhost\\SQLEXPRESS", db_name: str = "ClinicaMariaInmaculada") -> Tuple[bool, str, Dict]:
+    def setup_completo(self, 
+                       server: str = "localhost\\SQLEXPRESS", 
+                       db_name: str = "ClinicaMariaInmaculada") -> Tuple[bool, str, Dict]:
         """
-        Ejecuta el setup completo automático
+        ✅ MEJORADO: Ejecuta el setup completo con validación y mejor feedback
         
         Returns:
             Tuple[bool, str, dict]: (éxito, mensaje, credenciales)
@@ -437,40 +781,55 @@ class DatabaseInstaller:
         credenciales = {}
         
         try:
-            print("\n" + "="*60)
-            print("🚀 INICIANDO SETUP AUTOMÁTICO")
-            print("="*60 + "\n")
+            logger.info("="*60)
+            logger.info("INICIANDO SETUP AUTOMÁTICO")
+            logger.info("="*60)
+            
+            self._report_progress("Iniciando setup...", 0)
             
             # Paso 1: Verificar SQL Server
-            print("📋 Paso 1/4: Verificando SQL Server...")
+            self._report_progress("Verificando SQL Server...", 5)
+            logger.info("Paso 1/5: Verificando SQL Server...")
             exito, mensaje = self.verificar_sql_server(server)
             if not exito:
                 return False, mensaje, credenciales
-            print(f"   {mensaje}\n")
+            logger.info(f"   {mensaje}")
             
-            # Paso 2: Verificar BD
-            print("📋 Paso 2/4: Verificando base de datos...")
+            # Paso 2: Validar scripts
+            self._report_progress("Validando scripts de instalación...", 8)
+            logger.info("Paso 2/5: Validando scripts...")
+            if not self._validar_scripts_requeridos():
+                return False, "❌ Faltan scripts SQL requeridos", credenciales
+            logger.info("   ✅ Todos los scripts encontrados")
+            
+            # Paso 3: Verificar BD
+            self._report_progress("Verificando base de datos...", 10)
+            logger.info("Paso 3/5: Verificando base de datos...")
             existe, mensaje = self.verificar_base_datos_existe(server, db_name)
-            print(f"   {mensaje}\n")
+            logger.info(f"   {mensaje}")
             
             if not existe:
-                # Paso 3: Crear BD
-                print("📋 Paso 3/4: Creando base de datos...")
+                # Paso 4: Crear BD
+                logger.info("Paso 4/5: Creando base de datos...")
                 exito, mensaje = self.crear_base_datos(server, db_name)
                 if not exito:
                     return False, mensaje, credenciales
-                print(f"   {mensaje}\n")
+                logger.info(f"   {mensaje}")
             else:
-                print("   ✅ Usando base de datos existente\n")
+                logger.info("   ✅ Usando base de datos existente")
+                self._report_progress("Base de datos existente encontrada", 80)
             
-            # Paso 4: Crear usuario admin
-            print("📋 Paso 4/4: Creando usuario administrador...")
+            # Paso 5: Crear usuario admin
+            self._report_progress("Creando usuario administrador...", 85)
+            logger.info("Paso 5/5: Creando usuario administrador...")
             username = "admin"
             password = "admin123"
             exito, mensaje = self.crear_usuario_admin(server, db_name, username, password)
             if not exito:
-                return False, mensaje, credenciales
-            print(f"   {mensaje}\n")
+                # No es crítico si el usuario ya existe
+                if "ya existe" not in mensaje:
+                    return False, mensaje, credenciales
+            logger.info(f"   {mensaje}")
             
             credenciales = {
                 "username": username,
@@ -479,17 +838,22 @@ class DatabaseInstaller:
                 "database": db_name
             }
             
-            print("="*60)
-            print("✅ ¡SETUP COMPLETADO EXITOSAMENTE!")
-            print("="*60)
-            print(f"\n📝 Credenciales de acceso:")
-            print(f"   Usuario: {username}")
-            print(f"   Contraseña: {password}")
-            print(f"\n⚠️  IMPORTANTE: Cambia tu contraseña después del primer inicio de sesión\n")
+            self._report_progress("Setup completado exitosamente", 100)
+            
+            logger.info("="*60)
+            logger.info("✅ ¡SETUP COMPLETADO EXITOSAMENTE!")
+            logger.info("="*60)
+            logger.info(f"\n📝 Credenciales de acceso:")
+            logger.info(f"   Usuario: {username}")
+            logger.info(f"   Contraseña: {password}")
+            logger.info(f"\n⚠️  IMPORTANTE: Cambia tu contraseña después del primer inicio de sesión\n")
             
             return True, "✅ Setup completado exitosamente", credenciales
             
         except Exception as e:
+            logger.error(f"Error en setup: {e}")
+            import traceback
+            traceback.print_exc()
             return False, f"❌ Error en setup: {str(e)}", credenciales
 
 

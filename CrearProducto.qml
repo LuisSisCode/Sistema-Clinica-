@@ -1034,7 +1034,7 @@ Rectangle {
                                     id: unidadCombo
                                     Layout.fillWidth: true
                                     Layout.preferredHeight: inputHeight
-                                    model: ["Tableta", "Cápsulas", "ml", "mg", "g", "Unidad", "Sobres", "Frascos", "Tubo", "Inhalador", "Ampolla"]
+                                    model: ["Tableta", "Cápsulas", "Comprimido", "Gragea", "Polvo", "Solución", "Suspensión", "Jarabe", "Gotas", "Inyección", "Ampolla", "Vial", "ml", "Litro", "mg", "g", "mcg", "mEq", "UI", "Unidad", "Sobre", "Frasco", "Tubo", "Inhalador", "Parche", "Crema", "Ungüento", "Gel", "Loción", "Spray", "Supositorio", "Óvulo", "Implante"]
                                     
                                     onCurrentTextChanged: {
                                         inputMeasureUnit = currentText

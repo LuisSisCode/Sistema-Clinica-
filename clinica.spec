@@ -1,7 +1,7 @@
 """
 ═══════════════════════════════════════════════════════════════
 CONFIGURACIÓN PYINSTALLER - Sistema Clínica María Inmaculada
-Versión 1.0 - Actualizado con arquitectura completa
+Versión 2.0 - Actualizado con db_installer v3.0 y mejoras
 ═══════════════════════════════════════════════════════════════
 """
 
@@ -16,113 +16,83 @@ from PyInstaller.building.build_main import Analysis, EXE, COLLECT, PYZ
 project_dir = Path('.').resolve()
 
 print("=" * 70)
-print("🏥 SISTEMA CLÍNICA MARÍA INMACULADA - BUILD v1.0")
+print("🏥 SISTEMA CLÍNICA MARÍA INMACULADA - BUILD v2.0")
 print("=" * 70)
 print(f"📁 Directorio del proyecto: {project_dir}")
 print("=" * 70)
 
 # ═══════════════════════════════════════════════════════════════
-# 1. ARCHIVOS QML (INTERFAZ DE USUARIO)
+# 1. ARCHIVOS QML (INTERFAZ DE USUARIO) - AUTO-DISCOVER
 # ═══════════════════════════════════════════════════════════════
 print("\n📋 RECOPILANDO ARCHIVOS QML...")
 
-qml_files = [
-    # Core / Principal
-    'main.qml',
-    'login.qml',
-    'setup_wizard.qml',
-    'Dashboard.qml',
-    
-    # Módulo de Compras
-    'Compras.qml',
-    'CrearCompra.qml',
-    'ComprasMain.qml',
-    
-    # Módulo de Ventas
-    'Ventas.qml',
-    'CrearVenta.qml',
-    'VentasMain.qml',
-    
-    # Módulo de Proveedores
-    'Proveedores.qml',
-    'CrearProveedor.qml',
-    
-    # Módulo de Productos/Inventario
-    'Productos.qml',
-    'CrearProducto.qml',
-    'DetalleProducto.qml',
-    
-    # Módulos Clínicos
-    'Farmacia.qml',
-    'Consultas.qml',
-    'Laboratorio.qml',
-    'Enfermeria.qml',
-    
-    # Módulo de Trabajadores
-    'Trabajadores.qml',
-    'ConfiTrabajadores.qml',
-    
-    # Módulo de Usuarios
-    'Usuario.qml',
-    'ConfiUsuarios.qml',
-    
-    # Módulos de Configuración
-    'Configuracion.qml',
-    'ConfiConsultas.qml',
-    'ConfiEnfermeria.qml',
-    'ConfiLaboratorio.qml',
-    'ConfiServiciosBasicos.qml',
-    
-    # Módulos Financieros
-    'ServiciosBasicos.qml',
-    'Reportes.qml',
-    'CierreCaja.qml',
-    'IngresosExtras.qml',
-    'Gastos.qml',
-    'Egresos.qml',
-    
-    # Componentes Reutilizables
-    'MarcaComboBox.qml',
-    'ProveedorComboBox.qml',
-    'GlobalDataCenter.qml',
-]
-
 datas_qml = []
 qml_found = 0
-qml_missing = 0
 
-for qml_file in qml_files:
-    full_path = project_dir / qml_file
-    if full_path.exists():
-        datas_qml.append((str(full_path), '.'))
-        qml_found += 1
-        print(f"  ✅ {qml_file}")
-    else:
-        qml_missing += 1
-        print(f"  ⚠️  {qml_file} (no encontrado)")
+# ✅ Auto-descubrir todos los archivos .qml en la raíz
+qml_files_in_root = list(project_dir.glob('*.qml'))
 
-print(f"\n📊 Archivos QML: {qml_found} encontrados, {qml_missing} faltantes")
+for qml_file in qml_files_in_root:
+    datas_qml.append((str(qml_file), '.'))
+    qml_found += 1
+    print(f"  ✅ {qml_file.name}")
+
+print(f"\n📊 Archivos QML: {qml_found} encontrados")
 
 # ═══════════════════════════════════════════════════════════════
-# 2. SCRIPTS DE BASE DE DATOS
+# 2. SCRIPTS DE BASE DE DATOS - CRÍTICO PARA SETUP
 # ═══════════════════════════════════════════════════════════════
 print("\n💾 RECOPILANDO SCRIPTS SQL...")
 
 datas_db_scripts = []
 db_scripts_dir = project_dir / 'database_scripts'
 
+required_scripts = [
+    '01_schema.sql',
+    '02_datos_iniciales.sql',
+    '03_indices_optimizacion.sql',  # ✅ NUEVO
+]
+
 if db_scripts_dir.exists():
-    sql_files = list(db_scripts_dir.glob('*.sql'))
-    for sql_file in sql_files:
-        datas_db_scripts.append((str(sql_file), 'database_scripts'))
-        print(f"  ✅ {sql_file.name}")
-    print(f"\n📊 Scripts SQL: {len(sql_files)} archivos")
+    for script_name in required_scripts:
+        script_path = db_scripts_dir / script_name
+        if script_path.exists():
+            datas_db_scripts.append((str(script_path), 'database_scripts'))
+            print(f"  ✅ {script_name}")
+        else:
+            print(f"  ❌ {script_name} - NO ENCONTRADO (CRÍTICO)")
+    
+    print(f"\n📊 Scripts SQL: {len(datas_db_scripts)}/3 requeridos")
+    
+    if len(datas_db_scripts) < 3:
+        print("\n⚠️  ADVERTENCIA: Faltan scripts SQL críticos")
+        print("   El setup automático podría no funcionar correctamente")
 else:
     print("  ❌ ERROR: Carpeta 'database_scripts' no encontrada")
-    print("  💡 Asegúrate de que exista la carpeta con los archivos SQL")
+    print("  💡 SOLUCIÓN: Crea la carpeta y copia los 3 archivos SQL")
 
 # ═══════════════════════════════════════════════════════════════
-# 3. RECURSOS (ICONOS, IMÁGENES, ETC.)
+# 3. BACKEND COMPLETO - INCLUIR TODO
+# ═══════════════════════════════════════════════════════════════
+print("\n🔧 RECOPILANDO BACKEND...")
+
+datas_backend = []
+backend_dir = project_dir / 'backend'
+
+if backend_dir.exists():
+    # Incluir toda la carpeta backend recursivamente
+    for py_file in backend_dir.rglob('*.py'):
+        # Calcular ruta relativa para mantener estructura
+        rel_path = py_file.relative_to(project_dir)
+        dest_dir = str(rel_path.parent)
+        datas_backend.append((str(py_file), dest_dir))
+    
+    print(f"  ✅ Backend incluido ({len(datas_backend)} archivos .py)")
+else:
+    print("  ❌ ERROR: Carpeta 'backend' no encontrada")
+
+# ═══════════════════════════════════════════════════════════════
+# 4. RECURSOS (ICONOS, IMÁGENES, ETC.)
 # ═══════════════════════════════════════════════════════════════
 print("\n🎨 RECOPILANDO RECURSOS...")
 
@@ -140,7 +110,7 @@ else:
     print("  ⚠️  Carpeta 'Resources' no encontrada")
 
 # ═══════════════════════════════════════════════════════════════
-# 4. ARCHIVOS ADICIONALES
+# 5. ARCHIVOS ADICIONALES OPCIONALES
 # ═══════════════════════════════════════════════════════════════
 print("\n📄 RECOPILANDO ARCHIVOS ADICIONALES...")
 
@@ -151,7 +121,6 @@ additional_files = [
     'logger_config.py',
     'resource_validator.py',
     'README.md',
-    'LEEME.txt',
     'LICENSE.txt',
 ]
 
@@ -160,20 +129,18 @@ for file in additional_files:
     if full_path.exists():
         datas_additional.append((str(full_path), '.'))
         print(f"  ✅ {file}")
-    else:
-        print(f"  ⚠️  {file} (opcional)")
 
 # ═══════════════════════════════════════════════════════════════
-# 5. COMBINAR TODOS LOS DATOS
+# 6. COMBINAR TODOS LOS DATOS
 # ═══════════════════════════════════════════════════════════════
-all_datas = datas_qml + datas_db_scripts + datas_resources + datas_additional
+all_datas = datas_qml + datas_db_scripts + datas_backend + datas_resources + datas_additional
 
 print("\n" + "=" * 70)
 print(f"📦 TOTAL ARCHIVOS A INCLUIR: {len(all_datas)}")
 print("=" * 70)
 
 # ═══════════════════════════════════════════════════════════════
-# 6. MÓDULOS OCULTOS (HIDDEN IMPORTS)
+# 7. MÓDULOS OCULTOS (HIDDEN IMPORTS) - ACTUALIZADO
 # ═══════════════════════════════════════════════════════════════
 print("\n🔧 CONFIGURANDO MÓDULOS OCULTOS...")
 
@@ -188,6 +155,7 @@ hiddenimports = [
     'PySide6.QtSql',
     'PySide6.QtNetwork',
     'PySide6.QtPrintSupport',
+    'PySide6.QtConcurrent',
     
     # ========== Backend Core ==========
     'backend',
@@ -198,8 +166,11 @@ hiddenimports = [
     'backend.core.excepciones',
     'backend.core.base_repository',
     'backend.core.utils',
-    'backend.core.db_installer',
+    'backend.core.db_installer',        # ✅ Actualizado v3.0
     'backend.core.config_manager',
+    'backend.core.config_fifo',
+    'backend.core.login',
+    'backend.core.signals_manager',
     
     # ========== Backend Models ==========
     'backend.models',
@@ -219,9 +190,11 @@ hiddenimports = [
     'backend.models.ingreso_extra_model',
     'backend.models.reportes_model',
     'backend.models.dashboard_model',
+    'backend.models.medico_model',
     
     # ========== Backend Models - Configuración ==========
     'backend.models.ConfiguracionModel',
+    'backend.models.ConfiguracionModel.configuracion_model',
     'backend.models.ConfiguracionModel.ConfiConsulta_model',
     'backend.models.ConfiguracionModel.ConfiEnfermeria_model',
     'backend.models.ConfiguracionModel.ConfiLaboratorio_model',
@@ -245,21 +218,25 @@ hiddenimports = [
     'backend.repositories.cierre_caja_repository',
     'backend.repositories.ingreso_extra_repository',
     'backend.repositories.reportes_repository',
+    'backend.repositories.especialidad_repository',
+    'backend.repositories.estadistica_repository',
     
     # ========== Backend Repositories - Configuración ==========
     'backend.repositories.ConfiguracionRepositor',
+    'backend.repositories.ConfiguracionRepositor.configuracion_repository',
     'backend.repositories.ConfiguracionRepositor.ConfiConsulta_repository',
     'backend.repositories.ConfiguracionRepositor.ConfiEnfermeria_repository',
     'backend.repositories.ConfiguracionRepositor.ConfiLaboratorio_repository',
     'backend.repositories.ConfiguracionRepositor.ConfiServiciosbasicos_repository',
     'backend.repositories.ConfiguracionRepositor.ConfiTrabajadores_repository',
     
-    # ========== Dependencias Externas ==========
-    # Base de datos
+    # ========== Dependencias de Base de Datos ==========
     'pyodbc',
     'sqlalchemy',
+    'sqlalchemy.engine',
+    'sqlalchemy.pool',
     
-    # Generación de PDFs
+    # ========== Generación de PDFs ==========
     'reportlab',
     'reportlab.pdfgen',
     'reportlab.pdfgen.canvas',
@@ -274,34 +251,47 @@ hiddenimports = [
     'reportlab.platypus.tables',
     'reportlab.platypus.frames',
     'reportlab.platypus.doctemplate',
+    'reportlab.platypus.flowables',
     
-    # Configuración y utilidades
+    # ========== Configuración y Utilidades ==========
     'dotenv',
+    'python_dotenv',
     'pathlib',
+    'bcrypt',
     
-    # Manejo de imágenes
+    # ========== Manejo de Imágenes ==========
     'PIL',
     'PIL.Image',
     'PIL.ImageDraw',
     'PIL.ImageFont',
+    'PIL.ImageOps',
+    'PIL.ImageFilter',
     
-    # Sistema y logging
+    # ========== Sistema y Logging ==========
     'logging',
     'logging.handlers',
     'logger_config',
     'resource_validator',
     
-    # Otros
+    # ========== Otros Módulos Estándar ==========
     'datetime',
     'decimal',
     'json',
     'hashlib',
+    'threading',
+    'queue',
+    'weakref',
+    'collections',
+    'itertools',
+    'functools',
+    're',
+    'typing',
 ]
 
 print(f"  ✅ {len(hiddenimports)} módulos configurados")
 
 # ═══════════════════════════════════════════════════════════════
-# 7. ANÁLISIS PRINCIPAL
+# 8. ANÁLISIS PRINCIPAL
 # ═══════════════════════════════════════════════════════════════
 print("\n🔍 INICIANDO ANÁLISIS DE DEPENDENCIAS...")
 
@@ -333,6 +323,11 @@ a = Analysis(
         '_pytest',
         'django',
         'flask',
+        'flask_cors',
+        'tornado',
+        'twisted',
+        'asyncio',
+        'multiprocessing',
     ],
     noarchive=False,
     optimize=0,
@@ -341,7 +336,7 @@ a = Analysis(
 print("  ✅ Análisis completado")
 
 # ═══════════════════════════════════════════════════════════════
-# 8. COMPILACIÓN DE ARCHIVOS PYTHON
+# 9. COMPILACIÓN DE ARCHIVOS PYTHON
 # ═══════════════════════════════════════════════════════════════
 print("\n📦 EMPAQUETANDO ARCHIVOS PYTHON...")
 
@@ -349,15 +344,15 @@ pyz = PYZ(a.pure, a.zipped_data)
 print("  ✅ Archivos Python empaquetados")
 
 # ═══════════════════════════════════════════════════════════════
-# 9. CONFIGURACIÓN DEL EJECUTABLE
+# 10. CONFIGURACIÓN DEL EJECUTABLE
 # ═══════════════════════════════════════════════════════════════
 print("\n🎯 CONFIGURANDO EJECUTABLE...")
 
 # Buscar icono disponible
 icon_path = None
 possible_icons = [
-    'Resources/iconos/logo_CMI.ico',
     'Resources/iconos/Logo_de_Emergencia_Médica_RGL-removebg-preview.ico',
+    'Resources/iconos/logo_CMI.ico',
     'Resources/logo.ico',
     'icon.ico',
 ]
@@ -370,7 +365,47 @@ for icon in possible_icons:
         break
 
 if not icon_path:
-    print("  ⚠️  No se encontró archivo de icono")
+    print("  ⚠️  No se encontró archivo de icono (.ico)")
+
+# ✅ Información de versión para Windows
+version_info = None
+try:
+    from PyInstaller.utils.win32.versioninfo import VSVersionInfo, FixedFileInfo, \
+        StringFileInfo, StringTable, StringStruct, VarFileInfo, VarStruct
+    
+    version_info = VSVersionInfo(
+        ffi=FixedFileInfo(
+            filevers=(1, 0, 0, 0),
+            prodvers=(1, 0, 0, 0),
+            mask=0x3f,
+            flags=0x0,
+            OS=0x40004,
+            fileType=0x1,
+            subtype=0x0,
+            date=(0, 0)
+        ),
+        kids=[
+            StringFileInfo([
+                StringTable(
+                    '040904B0',  # English (US) + Unicode
+                    [
+                        StringStruct('CompanyName', 'Clínica María Inmaculada'),
+                        StringStruct('FileDescription', 'Sistema de Gestión Clínica'),
+                        StringStruct('FileVersion', '1.0.0.0'),
+                        StringStruct('InternalName', 'ClinicaApp'),
+                        StringStruct('LegalCopyright', '© 2026 Clínica María Inmaculada'),
+                        StringStruct('OriginalFilename', 'ClinicaApp.exe'),
+                        StringStruct('ProductName', 'Sistema Clínica María Inmaculada'),
+                        StringStruct('ProductVersion', '1.0.0.0'),
+                    ]
+                )
+            ]),
+            VarFileInfo([VarStruct('Translation', [1033, 1200])])
+        ]
+    )
+    print("  ✅ Información de versión configurada")
+except:
+    print("  ⚠️  No se pudo configurar información de versión")
 
 exe = EXE(
     pyz,
@@ -382,20 +417,20 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=False,  # Sin ventana de consola
+    console=False,  # ✅ Sin ventana de consola (aplicación de ventanas)
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
     icon=icon_path,
-    version=None
+    version=version_info  # ✅ Información de versión incluida
 )
 
 print("  ✅ Configuración del ejecutable completada")
 
 # ═══════════════════════════════════════════════════════════════
-# 10. RECOPILACIÓN FINAL
+# 11. RECOPILACIÓN FINAL
 # ═══════════════════════════════════════════════════════════════
 print("\n📂 RECOPILANDO ARCHIVOS FINALES...")
 
@@ -419,12 +454,25 @@ print("🎉 CONFIGURACIÓN COMPLETADA EXITOSAMENTE")
 print("=" * 70)
 print("\n📋 RESUMEN:")
 print(f"  • Archivos QML: {qml_found}")
-print(f"  • Scripts SQL: {len(datas_db_scripts)}")
+print(f"  • Scripts SQL: {len(datas_db_scripts)}/3 requeridos")
+print(f"  • Backend: {len(datas_backend)} archivos")
 print(f"  • Recursos: {'Sí' if datas_resources else 'No'}")
 print(f"  • Módulos ocultos: {len(hiddenimports)}")
 print(f"  • Total archivos: {len(all_datas)}")
+
+# ✅ Advertencias importantes
+if len(datas_db_scripts) < 3:
+    print("\n⚠️  ADVERTENCIA: Faltan scripts SQL críticos")
+    print("   El setup automático NO funcionará sin los 3 scripts")
+
+if not icon_path:
+    print("\n⚠️  ADVERTENCIA: No se encontró icono")
+    print("   El ejecutable no tendrá icono personalizado")
+
 print("\n🚀 LISTO PARA COMPILAR")
-print("\nPara compilar, ejecuta:")
-print("  pyinstaller clinica.spec")
-print("\nEl ejecutable estará en: dist/ClinicaApp/")
+print("\n📝 Para compilar, ejecuta:")
+print("   pyinstaller clinica.spec --clean")
+print("\n📦 El ejecutable estará en:")
+print("   dist/ClinicaApp/ClinicaApp.exe")
+print("\n📊 Tamaño estimado: ~150-250 MB")
 print("=" * 70)

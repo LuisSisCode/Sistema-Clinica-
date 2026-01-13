@@ -706,8 +706,19 @@ Item {
                                 anchors.fill: parent
                                 anchors.margins: 1
                                 font.pixelSize: fontBase
-                                model: ["Todos los años", "2025", "2024", "2023"]
+                                model: generarListaAnios()
                                 currentIndex: 0
+
+                                Component.onCompleted: {
+                                    // Seleccionar el año actual por defecto
+                                    var anioActual = new Date().getFullYear();
+                                    for (var i = 0; i < model.length; i++) {
+                                        if (model[i] === anioActual.toString()) {
+                                            currentIndex = i;
+                                            break;
+                                        }
+                                    }
+                                }
 
                                 onCurrentIndexChanged: {
                                     if (currentIndex === 0) {

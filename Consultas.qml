@@ -441,7 +441,7 @@ Item {
                             
                             ComboBox {
                                 id: filtroEspecialidad
-                                Layout.fillWidth: true
+                                Layout.preferredWidth: Math.max(300, width * 0.18)
                                 Layout.preferredHeight: baseUnit * 4
                                 model: {
                                     var especialidades = ["Todas"]
