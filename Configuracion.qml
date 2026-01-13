@@ -1025,75 +1025,143 @@ Item {
                         }
                         
                         onClicked: {
-                            // ✅ MEJORADO: Mejor manejo de errores y verificaciones
                             try {
-                                console.log("🔐 Iniciando cambio de contraseña...")
+                                console.log("🔐 INICIO - Proceso de cambio de contraseña")
                                 
-                                // Verificar que authModel existe y está autenticado
-                                if (!authModel) {
-                                    console.error("❌ authModel no está disponible")
-                                    showNotification("Error", "Sistema de autenticación no disponible", "error")
+                                // 1. Validaciones básicas
+                                if (!currentPasswordField.text || !newPasswordField.text || !confirmPasswordField.text) {
+                                    showNotification("Error", "Todos los campos son obligatorios", "error")
                                     return
                                 }
                                 
-                                if (!authModel.isAuthenticated) {
-                                    console.error("❌ Usuario no autenticado")
-                                    showNotification("Error", "Usuario no autenticado", "error")
+                                if (newPasswordField.text !== confirmPasswordField.text) {
+                                    showNotification("Error", "Las nuevas contraseñas no coinciden", "error")
                                     return
                                 }
                                 
-                                // Verificar que appController existe
-                                if (!appController) {
-                                    console.error("❌ appController no está disponible")
-                                    showNotification("Error", "Controlador de aplicación no disponible", "error")
+                                if (newPasswordField.text.length < 6) {
+                                    showNotification("Error", "La nueva contraseña debe tener al menos 6 caracteres", "error")
                                     return
                                 }
                                 
-                                // Verificar que usuario_model_instance existe
-                                if (!appController.usuario_model_instance) {
-                                    console.error("❌ usuario_model_instance no está disponible")
-                                    showNotification("Error", "Módulo de usuarios no disponible", "error")
-                                    return
+                                // 2. DEPURACIÓN: Verificar qué información tenemos
+                                console.log("=== DEBUG DE AUTENTICACIÓN ===")
+                                console.log("authModel disponible:", authModel ? "SÍ" : "NO")
+                                if (authModel) {
+                                    console.log("authModel.isAuthenticated:", authModel.isAuthenticated)
+                                    console.log("authModel.userName:", authModel.userName)
+                                    console.log("authModel.userRole:", authModel.userRole)
+                                    console.log("authModel.current_user_id:", authModel.current_user_id)
+                                    console.log("authModel.get_user_id disponible:", typeof authModel.get_user_id === 'function')
+                                    
+                                    if (typeof authModel.get_user_id === 'function') {
+                                        console.log("authModel.get_user_id():", authModel.get_user_id())
+                                    }
                                 }
+                                console.log("appController disponible:", appController ? "SÍ" : "NO")
+                                console.log("==============================")
                                 
-                                // Obtener ID del usuario actual
+                                // 3. Obtener ID del usuario actual usando MÚLTIPLES métodos
                                 var userId = 0
-                                if (authModel.get_user_id) {
-                                    userId = authModel.get_user_id()
-                                } else if (authModel.current_user_id !== undefined) {
+                                
+                                // Método 1: current_user_id (property)
+                                if (authModel && authModel.current_user_id !== undefined) {
                                     userId = authModel.current_user_id
+                                    console.log("✅ ID obtenido de authModel.current_user_id:", userId)
+                                }
+                                
+                                // Método 2: get_user_id() (método)
+                                if (userId <= 0 && authModel && typeof authModel.get_user_id === 'function') {
+                                    userId = authModel.get_user_id()
+                                    console.log("✅ ID obtenido de authModel.get_user_id():", userId)
+                                }
+                                
+                                // Método 3: usuario_actual_id de appController
+                                if (userId <= 0 && appController && appController.usuario_actual_id !== undefined) {
+                                    userId = appController.usuario_actual_id
+                                    console.log("✅ ID obtenido de appController.usuario_actual_id:", userId)
                                 }
                                 
                                 if (userId <= 0) {
-                                    console.error("❌ ID de usuario inválido:", userId)
-                                    showNotification("Error", "No se pudo obtener el ID del usuario actual", "error")
+                                    console.error("❌ NO SE PUDO OBTENER EL ID DEL USUARIO")
+                                    showNotification("Error", "No se pudo identificar al usuario actual", "error")
                                     return
                                 }
                                 
-                                console.log("👤 Cambiando contraseña para usuario ID:", userId)
+                                console.log("👤 Usuario identificado - ID:", userId)
                                 
-                                // Intentar cambiar contraseña
-                                var success = appController.usuario_model_instance.cambiarContrasena(
-                                    userId,
-                                    currentPasswordField.text,
-                                    newPasswordField.text
-                                )
-                                
-                                if (success) {
-                                    console.log("✅ Contraseña cambiada exitosamente")
-                                    currentPasswordField.clear()
-                                    newPasswordField.clear()
-                                    confirmPasswordField.clear()
-                                    passwordChanged()
-                                    showNotification("Éxito", "Contraseña actualizada correctamente", "success")
-                                } else {
-                                    console.error("❌ Error cambiando contraseña - método retornó false")
-                                    showNotification("Error", "No se pudo cambiar la contraseña. Verifique su contraseña actual.", "error")
+                                // 4. Método A: Usar el nuevo método del AppController
+                                if (appController && typeof appController.cambiar_contrasena_usuario === 'function') {
+                                    console.log("🔄 Usando AppController.cambiar_contrasena_usuario...")
+                                    var success = appController.cambiar_contrasena_usuario(
+                                        userId,
+                                        currentPasswordField.text,
+                                        newPasswordField.text
+                                    )
+                                    
+                                    if (success) {
+                                        console.log("✅ Contraseña cambiada exitosamente")
+                                        currentPasswordField.clear()
+                                        newPasswordField.clear()
+                                        confirmPasswordField.clear()
+                                        passwordChanged()
+                                        showNotification("Éxito", "Contraseña actualizada correctamente", "success")
+                                    } else {
+                                        console.error("❌ Error cambiando contraseña")
+                                        showNotification("Error", 
+                                            "No se pudo cambiar la contraseña. Verifique:\n" +
+                                            "1. La contraseña actual es correcta\n" +
+                                            "2. La nueva contraseña tiene al menos 6 caracteres", 
+                                            "error")
+                                    }
+                                    return
                                 }
                                 
+                                // 5. Método B: Usar usuario_model_instance directamente
+                                if (appController && appController.usuario_model_instance) {
+                                    console.log("🔄 Usando usuario_model_instance directamente...")
+                                    var usuarioModel = appController.usuario_model_instance
+                                    
+                                    // Verificar qué métodos están disponibles
+                                    console.log("🔍 Métodos disponibles en usuarioModel:")
+                                    console.log("  - cambiarContrasena:", typeof usuarioModel.cambiarContrasena)
+                                    console.log("  - change_password:", typeof usuarioModel.change_password)
+                                    
+                                    if (typeof usuarioModel.cambiarContrasena === 'function') {
+                                        console.log("🔄 Llamando a cambiarContrasena...")
+                                        var success = usuarioModel.cambiarContrasena(
+                                            userId,
+                                            currentPasswordField.text,
+                                            newPasswordField.text
+                                        )
+                                        
+                                        if (success) {
+                                            console.log("✅ Contraseña cambiada exitosamente")
+                                            currentPasswordField.clear()
+                                            newPasswordField.clear()
+                                            confirmPasswordField.clear()
+                                            passwordChanged()
+                                            showNotification("Éxito", "Contraseña actualizada correctamente", "success")
+                                        } else {
+                                            console.error("❌ cambiarContrasena retornó false")
+                                            showNotification("Error", 
+                                                "Contraseña actual incorrecta o error en el sistema", 
+                                                "error")
+                                        }
+                                        return
+                                    }
+                                }
+                                
+                                // 6. Si llegamos aquí, ningún método funcionó
+                                console.error("❌ No se encontró ningún método viable para cambiar contraseña")
+                                showNotification("Error", 
+                                    "Sistema de cambio de contraseña no disponible.\n" +
+                                    "Por favor, contacte al administrador.", 
+                                    "error")
+                                
                             } catch (error) {
-                                console.error("❌ Excepción cambiando contraseña:", error)
-                                showNotification("Error", "Error inesperado: " + error, "error")
+                                console.error("❌ EXCEPCIÓN en cambio de contraseña:", error)
+                                showNotification("Error", "Error técnico: " + error, "error")
                             }
                         }
                     }

@@ -240,6 +240,11 @@ Item {
                 delayedInitTimer.start()
             }
         }
+        // Agregar esta señal al Connections del GastoModel:
+        function onProveedoresGastosChanged() {
+            console.log("🔄 Proveedores de gastos actualizados desde señal")
+            Qt.callLater(loadProveedoresGastosFromModel)
+        }
     }
     
     // TIMER PARA INICIALIZACIÓN RETRASADA
@@ -535,19 +540,21 @@ Item {
             añoValor = new Date().getFullYear();
         }
         
+        // CORREGIDO: Inicializar siempre con año seleccionado, pero también manejar el caso cuando no se quiere filtrar por año
         var filtrosActuales = {
             tipo_id: filtroTipoServicio.currentIndex > 0 ? 
-                tiposGastosModel.get(filtroTipoServicio.currentIndex - 1).id : 0,
-            mes: 0,
-            año: añoValor
+                tiposGastosModel.get(filtroTipoServicio.currentIndex - 1).id : 0
         };
         
-        if (filtroMes.currentIndex === 0) {
-            filtrosActuales.mes = 0;
-            filtrosActuales.año = 0;
-        } else {
+        // Solo incluir mes si no es "Todos los períodos" y hay un año seleccionado
+        if (filtroMes.currentIndex > 0 && añoValor > 0) {
             filtrosActuales.mes = filtroMes.currentIndex;
             filtrosActuales.año = añoValor;
+        }
+        // Si hay año pero no mes, solo filtrar por año
+        else if (añoValor > 0) {
+            filtrosActuales.año = añoValor;
+            filtrosActuales.mes = -1;  // Valor especial para indicar "solo año, sin mes específico"
         }
         
         console.log("📊 Aplicando filtros:", JSON.stringify(filtrosActuales));
@@ -1578,7 +1585,7 @@ Item {
         id: gastoForm
         anchors.centerIn: parent
         width: Math.min(parent.width * 0.7, 500)
-        height: Math.min(parent.height * 0.75, 550)
+        height: Math.min(parent.height * 0.75, 700)
         modal: true
         closePolicy: Popup.NoAutoClose
         visible: showNewGastoDialog
@@ -1726,92 +1733,52 @@ Item {
                                 id: montoField
                                 width: parent.width
                                 height: 40
-                                placeholderText: "0.00"
+                                placeholderText: "0,00"
                                 font.pixelSize: fontInput
                                 
-                                // ✅ VALIDADOR MEJORADO - ACEPTA PUNTOS Y COMAS
+                                // ✅ VALIDADOR SIMPLIFICADO
                                 validator: RegularExpressionValidator {
-                                    regularExpression: /^(\d+)([.,](\d{0,2}))?$/
+                                    regularExpression: /^[0-9]*[,]?[0-9]{0,2}$/
                                 }
                                 
-                                // ✅ NORMALIZACIÓN MEJORADA
-                                onTextChanged: {
-                                    if (text.length === 0) {
-                                        montoField.color = textColor
-                                        montoValidationLabel.visible = false
-                                        return
-                                    }
-                                    
-                                    // Permitir solo números, punto y coma
-                                    var cleanedText = text.replace(/[^\d,.]/g, '')
-                                    
-                                    // Reemplazar coma por punto para cálculo interno
-                                    var normalizedText = cleanedText.replace(/,/g, '.')
-                                    
-                                    // Validar formato decimal
-                                    var decimalPattern = /^(\d+)(\.(\d{0,2}))?$/
-                                    var isValid = decimalPattern.test(normalizedText)
-                                    
-                                    // Feedback visual
-                                    if (isValid) {
-                                        montoField.color = textColor
-                                        montoValidationLabel.visible = false
-                                        
-                                        // Si hay más de 2 decimales, truncar
-                                        if (normalizedText.includes('.')) {
-                                            var parts = normalizedText.split('.')
-                                            if (parts[1].length > 2) {
-                                                normalizedText = parts[0] + '.' + parts[1].substring(0, 2)
-                                            }
-                                        }
-                                    } else {
-                                        montoField.color = dangerColor
-                                        montoValidationLabel.visible = true
-                                    }
-                                    
-                                    // Actualizar solo si hay cambios
-                                    if (cleanedText !== text) {
-                                        var cursorPos = cursorPosition
-                                        text = cleanedText
-                                        cursorPosition = Math.min(cursorPos, text.length)
-                                    }
-                                }
-                                
-                                // ✅ FORMATEO AL PERDER FOCO - CORREGIDO
+                                // ✅ NORMALIZACIÓN AL PERDER FOCO
                                 onEditingFinished: {
                                     if (text.length > 0) {
-                                        var normalizedText = text.replace(/,/g, '.')
-                                        var valor = parseFloat(normalizedText)
+                                        // Reemplazar punto por coma si existe
+                                        var textoNormalizado = text.replace('.', ',')
                                         
-                                        if (!isNaN(valor) && valor > 0) {
-                                            // Formatear a 2 decimales
-                                            text = valor.toFixed(2)
-                                            montoField.color = textColor
-                                            montoValidationLabel.visible = false
+                                        // Asegurar formato decimal
+                                        if (!textoNormalizado.includes(',')) {
+                                            textoNormalizado += ',00'
                                         } else {
-                                            montoField.color = dangerColor
-                                            montoValidationLabel.visible = true
+                                            var partes = textoNormalizado.split(',')
+                                            if (partes[1].length === 1) {
+                                                textoNormalizado += '0'
+                                            } else if (partes[1].length === 0) {
+                                                textoNormalizado += '00'
+                                            }
                                         }
+                                        
+                                        text = textoNormalizado
                                     }
                                 }
                                 
-                                // ✅ FILTRO DE TECLAS MEJORADO
+                                // ✅ FILTRO DE TECLAS BÁSICO
                                 Keys.onPressed: function(event) {
                                     var allowedKeys = [
                                         Qt.Key_0, Qt.Key_1, Qt.Key_2, Qt.Key_3, Qt.Key_4,
                                         Qt.Key_5, Qt.Key_6, Qt.Key_7, Qt.Key_8, Qt.Key_9,
-                                        Qt.Key_Period, Qt.Key_Comma, Qt.Key_Backspace, 
+                                        Qt.Key_Comma, Qt.Key_Period, Qt.Key_Backspace, 
                                         Qt.Key_Delete, Qt.Key_Left, Qt.Key_Right, Qt.Key_Tab,
                                         Qt.Key_Home, Qt.Key_End
                                     ]
                                     
                                     if (!allowedKeys.includes(event.key)) {
                                         event.accepted = false
-                                    } else {
-                                        // Permitir solo un separador decimal
-                                        if ((event.key === Qt.Key_Period || event.key === Qt.Key_Comma) && text.includes('.')) {
-                                            event.accepted = false
-                                        }
+                                    } else if (event.key === Qt.Key_Period) {
+                                        // Convertir punto a coma
+                                        event.accepted = false
+                                        insert(text.length, ',')
                                     }
                                 }
                             }
@@ -1921,7 +1888,7 @@ Item {
                             ProveedorComboBox {
                                 id: proveedorComboBox
                                 width: parent.width
-                                height: 40
+                                height: 45
                                 
                                 // ✅ FIX: Convertir ListModel a Array
                                 proveedoresModel: {
@@ -1989,7 +1956,7 @@ Item {
             // BOTONES
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 70
+                Layout.preferredHeight: 20
                 color: "transparent"
                 
                 Row {
@@ -2132,41 +2099,83 @@ Item {
         // CARGAR DATOS EN MODO EDICIÓN
         onVisibleChanged: {
             if (visible && isEditMode && editingGastoData) {
+                console.log("✏️ Cargando datos para edición:", JSON.stringify(editingGastoData))
+                
                 // Cargar tipo de gasto
                 var tipoGastoNombre = editingGastoData.tipoGasto
                 for (var i = 0; i < tiposGastosModel.count; i++) {
                     if (tiposGastosModel.get(i).nombre === tipoGastoNombre) {
                         tipoGastoCombo.currentIndex = i + 1
                         gastoForm.selectedTipoGastoIndex = i
+                        console.log("🏷️ Tipo de gasto cargado:", tipoGastoNombre, "índice:", i)
                         break
                     }
                 }
                 
-                // CORRECCIÓN: Cargar proveedor usando el nombre del proveedor
-                if (editingGastoData.proveedor && editingGastoData.proveedor !== "Sin proveedor") {
-                    // Buscar el proveedor por nombre
+                // ✅ CORRECCIÓN: Cargar proveedor - COMPARAR MEJOR
+                var proveedorNombre = editingGastoData.proveedor
+                console.log("🏢 Buscando proveedor para edición:", proveedorNombre)
+                
+                if (proveedorNombre && proveedorNombre !== "Sin proveedor" && proveedorNombre !== "Ninguno") {
+                    console.log("🔍 Buscando proveedor en modelo:", proveedorNombre)
+                    
+                    // Buscar el proveedor por nombre en el modelo
                     for (var j = 0; j < proveedoresGastosModel.count; j++) {
                         var prov = proveedoresGastosModel.get(j)
-                        if (prov.nombre === editingGastoData.proveedor) {
-                            proveedorComboBox.currentIndex = j
-                            gastoForm.selectedProveedorId = String(prov.id)  // ← CORREGIDO
+                        if (prov && prov.nombre === proveedorNombre) {
+                            console.log("✅ Proveedor encontrado:", prov.nombre, "ID:", prov.id)
+                            // ✅ LLAMAR A setProveedorById CON RETRASO PARA ASEGURAR QUE EL COMBOBOX ESTÉ LISTO
+                            Qt.callLater(function() {
+                                proveedorComboBox.setProveedorById(prov.id)
+                            })
+                            gastoForm.selectedProveedorId = String(prov.id)
                             break
                         }
                     }
                 } else {
-                    proveedorComboBox.reset() // "Sin proveedor"
-                    gastoForm.selectedProveedorId = "0"  // ← CORREGIDO
+                    // ✅ CORRECCIÓN: Si es "Ninguno", usar ID 1, no 0
+                    if (proveedorNombre === "Ninguno") {
+                        console.log("🏢 Usando proveedor 'Ninguno' (ID: 1)")
+                        Qt.callLater(function() {
+                            proveedorComboBox.setProveedorById(1)
+                        })
+                        gastoForm.selectedProveedorId = "1"
+                    } else {
+                        console.log("🏢 Sin proveedor (ID: 0)")
+                        Qt.callLater(function() {
+                            proveedorComboBox.reset()
+                        })
+                        gastoForm.selectedProveedorId = "0"
+                    }
                 }
                 
                 // Cargar resto de campos
-                descripcionField.text = editingGastoData.descripcion
-                montoField.text = editingGastoData.monto
-                fechaGastoField.text = editingGastoData.fechaGasto
+                descripcionField.text = editingGastoData.descripcion || ""
+                
+                // ✅ CORRECCIÓN: Convertir mato a formato válido
+                var montoValor = parseFloat(editingGastoData.monto || 0)
+                montoField.text = montoValor.toFixed(2).replace('.', ',')
+                console.log("💰 Monto cargado:", montoValor, "->", montoField.text)
+                
+                // ✅ CORRECCIÓN: Formato de fecha
+                if (editingGastoData.fechaGasto) {
+                    var fechaStr = String(editingGastoData.fechaGasto)
+                    if (fechaStr.includes(' ')) {
+                        fechaGastoField.text = fechaStr.split(' ')[0]
+                    } else {
+                        fechaGastoField.text = fechaStr
+                    }
+                    console.log("📅 Fecha cargada:", editingGastoData.fechaGasto, "->", fechaGastoField.text)
+                } else {
+                    fechaGastoField.text = Qt.formatDate(new Date(), "yyyy-MM-dd")
+                }
                 
             } else if (visible && !isEditMode) {
                 // Limpiar formulario
                 tipoGastoCombo.currentIndex = 0
-                proveedorComboBox.reset()
+                Qt.callLater(function() {
+                    proveedorComboBox.reset()
+                })
                 descripcionField.text = ""
                 montoField.text = ""
                 fechaGastoField.text = Qt.formatDate(new Date(), "yyyy-MM-dd")
@@ -2965,6 +2974,7 @@ Item {
         }
     }
 
+    // En la función crearNuevoProveedorGasto, AGREGAR validación de existencia:
     function crearNuevoProveedorGasto(nombre) {
         if (!gastoModelInstance) {
             console.log("❌ GastoModel no disponible")
@@ -2973,6 +2983,16 @@ Item {
         
         if (!nombre || nombre.length < 3) {
             showErrorMessage("Error", "El nombre del proveedor debe tener al menos 3 caracteres")
+            return
+        }
+        
+        console.log("🏢 Verificando si proveedor ya existe:", nombre)
+        
+        // ✅ PRIMERO VERIFICAR SI YA EXISTE
+        var existe = gastoModelInstance.proveedorGastoExiste(nombre)
+        if (existe) {
+            console.log("⚠️ Proveedor ya existe:", nombre)
+            showErrorMessage("Error", `El proveedor "${nombre}" ya existe`)
             return
         }
         

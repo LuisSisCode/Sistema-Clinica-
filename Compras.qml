@@ -20,7 +20,7 @@ Item {
     property var compraMenuContextual: null
     
     // Propiedades de paginación para compras
-    property int itemsPerPageCompras: 10
+    property int itemsPerPageCompras: 12
     property int currentPageCompras: 0
     property int totalPagesCompras: 0
     

@@ -245,6 +245,53 @@ class AppController(QObject):
             # Forzar limpieza básica aunque falle
             self._force_basic_cleanup()
 
+    @Slot(int, str, str, result=bool)
+    def cambiar_contrasena_usuario(self, usuario_id: int, contrasena_actual: str, nueva_contrasena: str) -> bool:
+        """
+        Método unificado para cambiar contraseña que usa la lógica correcta
+        
+        Args:
+            usuario_id: ID del usuario
+            contrasena_actual: Contraseña actual
+            nueva_contrasena: Nueva contraseña
+            
+        Returns:
+            True si se cambió correctamente, False si hubo error
+        """
+        try:
+            logger.info(f"🔐 Cambio de contraseña desde AppController para usuario ID: {usuario_id}")
+            
+            # Verificar que usuario_model_instance existe
+            if not self.usuario_model_instance:
+                logger.error("❌ usuario_model_instance no disponible")
+                return False
+            
+            # Usar el método correcto basado en lo que tenemos
+            if hasattr(self.usuario_model_instance, 'cambiarContrasena'):
+                logger.info("🔄 Usando método 'cambiarContrasena'")
+                success = self.usuario_model_instance.cambiarContrasena(
+                    usuario_id, 
+                    contrasena_actual, 
+                    nueva_contrasena
+                )
+            elif hasattr(self.usuario_model_instance, 'change_password'):
+                logger.info("🔄 Usando método 'change_password'")
+                success = self.usuario_model_instance.change_password(
+                    usuario_id,
+                    contrasena_actual,
+                    nueva_contrasena
+                )
+            else:
+                logger.error("❌ No se encontró método para cambiar contraseña")
+                return False
+            
+            logger.info(f"✅ Resultado cambio de contraseña: {success}")
+            return success
+            
+        except Exception as e:
+            logger.error(f"❌ Error en cambio de contraseña: {e}")
+            return False
+
     def _hay_operaciones_activas(self) -> bool:
         """✅ Verifica si hay operaciones activas en algún modelo"""
         try:

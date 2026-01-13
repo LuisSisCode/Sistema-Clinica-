@@ -1,5 +1,6 @@
 from typing import List, Dict, Any, Optional
 import hashlib
+import bcrypt
 import secrets
 from datetime import datetime, timedelta
 
@@ -104,8 +105,12 @@ class UsuarioRepository(BaseRepository):
         if not self._role_exists_and_active(rol_id):
             raise ValidationError("rol_id", rol_id, "Rol no existe o está inactivo")
         
-        # CORREGIDO: NO hashear contraseña, guardar en texto plano
-        # hashed_password = self._hash_password(contrasena) # ← COMENTADO
+        # ✅ Hashear contraseña con bcrypt antes de guardar
+        import bcrypt
+        hashed_password = bcrypt.hashpw(
+            contrasena.encode('utf-8'),
+            bcrypt.gensalt()
+        ).decode('utf-8')
         
         # Crear usuario
         user_data = {
@@ -113,7 +118,7 @@ class UsuarioRepository(BaseRepository):
             'Apellido_Paterno': apellido_paterno.strip(),
             'Apellido_Materno': apellido_materno.strip(),
             'nombre_usuario': nombre_usuario.lower().strip(),
-            'contrasena': contrasena,  # ← TEXTO PLANO para consistencia
+            'contrasena': hashed_password,  # ← Contraseña hasheada con bcrypt
             'Id_Rol': rol_id,
             'Estado': estado
         }
@@ -194,7 +199,7 @@ class UsuarioRepository(BaseRepository):
     def change_password(self, usuario_id: int, current_password: str, new_password: str) -> bool:
         """
         Cambia contraseña de usuario con validación de contraseña actual
-        CORREGIDO: Maneja contraseñas en texto plano como el sistema de login
+        ✅ CORREGIDO: Usa el mismo sistema de verificación que el login (bcrypt/SHA-256/texto plano)
         
         Args:
             usuario_id: ID del usuario
@@ -204,14 +209,18 @@ class UsuarioRepository(BaseRepository):
         Returns:
             True si se cambió correctamente
         """
+        import bcrypt
+        
         # Obtener usuario actual
         user = self.get_by_id(usuario_id)
         if not user:
             raise ValidationError("usuario_id", usuario_id, "Usuario no encontrado")
         
-        # CORREGIDO: Verificar contraseña actual (comparación directa)
+        # ✅ VERIFICAR contraseña actual usando el MISMO sistema que el login
         stored_password = user.get('contrasena', '')
-        if stored_password != current_password:
+        password_is_valid = self._verify_password_change(current_password, stored_password)
+        
+        if not password_is_valid:
             raise AuthenticationError("Contraseña actual incorrecta")
         
         # Validar nueva contraseña
@@ -219,23 +228,71 @@ class UsuarioRepository(BaseRepository):
         self._validate_password_strength(new_password)
         
         # No permitir la misma contraseña
-        if stored_password == new_password:
+        if current_password == new_password:
             raise ValidationError("new_password", "***", "La nueva contraseña debe ser diferente a la actual")
         
-        # CORREGIDO: Guardar nueva contraseña en texto plano (igual que el sistema actual)
-        success = self.update(usuario_id, {'contrasena': new_password})
+        # ✅ Hashear nueva contraseña con bcrypt antes de guardar
+        hashed_new_password = bcrypt.hashpw(
+            new_password.encode('utf-8'),
+            bcrypt.gensalt()
+        ).decode('utf-8')
+        
+        success = self.update(usuario_id, {'contrasena': hashed_new_password})
 
         if success:
             # ✅ INVALIDAR CACHÉ INMEDIATAMENTE
             self.invalidate_user_caches()
-            print(f"🔑 Contraseña cambiada: Usuario ID {usuario_id}")
+            print(f"🔑 Contraseña cambiada con bcrypt: Usuario ID {usuario_id}")
 
         return success
+    
+    def _verify_password_change(self, password: str, password_hash: str) -> bool:
+        """
+        Verifica contraseña para cambio - IGUAL que el login
+        Soporta bcrypt, SHA-256 y texto plano para compatibilidad
+        """
+        import bcrypt
+        
+        try:
+            # Intentar verificación con bcrypt primero
+            password_match = bcrypt.checkpw(
+                password.encode('utf-8'),
+                password_hash.encode('utf-8')
+            )
+            
+            if password_match:
+                print(f"✅ Contraseña actual verificada con bcrypt")
+                return True
+            else:
+                print(f"❌ Contraseña actual incorrecta (bcrypt)")
+                return False
+                
+        except ValueError:
+            # Si falla bcrypt, puede ser SHA-256 o texto plano
+            print(f"⚠️ Contraseña no es bcrypt, intentando SHA-256/texto plano...")
+            
+            # Intentar SHA-256
+            sha256_hash = hashlib.sha256(password.encode()).hexdigest()
+            if sha256_hash == password_hash:
+                print(f"✅ Contraseña actual verificada con SHA-256")
+                return True
+            
+            # Intentar texto plano (para migración)
+            if password == password_hash:
+                print(f"✅ Contraseña actual verificada en texto plano")
+                return True
+            
+            print(f"❌ Contraseña actual incorrecta en todos los formatos")
+            return False
+            
+        except Exception as e:
+            print(f"❌ Error verificando contraseña actual: {e}")
+            return False
     
     def reset_password(self, usuario_id: int, new_password: str) -> bool:
         """
         Resetea contraseña (solo para administradores)
-        CORREGIDO: Maneja contraseñas en texto plano
+        ✅ CORREGIDO: Usa bcrypt para hashear contraseña
         
         Args:
             usuario_id: ID del usuario
@@ -244,6 +301,8 @@ class UsuarioRepository(BaseRepository):
         Returns:
             True si se reseteó correctamente
         """
+        import bcrypt
+        
         user = self.get_by_id(usuario_id)
         if not user:
             raise ValidationError("usuario_id", usuario_id, "Usuario no encontrado")
@@ -251,13 +310,18 @@ class UsuarioRepository(BaseRepository):
         validate_required(new_password, "new_password")
         self._validate_password_strength(new_password)
         
-        # CORREGIDO: Guardar contraseña en texto plano
-        success = self.update(usuario_id, {'contrasena': new_password})
+        # ✅ Hashear contraseña con bcrypt
+        hashed_password = bcrypt.hashpw(
+            new_password.encode('utf-8'),
+            bcrypt.gensalt()
+        ).decode('utf-8')
+        
+        success = self.update(usuario_id, {'contrasena': hashed_password})
 
         if success:
             # ✅ INVALIDAR CACHÉ INMEDIATAMENTE
             self.invalidate_user_caches()
-            print(f"🔓 Contraseña reseteada: Usuario ID {usuario_id}")
+            print(f"🔓 Contraseña reseteada con bcrypt: Usuario ID {usuario_id}")
 
         return success
     

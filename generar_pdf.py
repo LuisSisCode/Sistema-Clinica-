@@ -693,7 +693,7 @@ class GeneradorReportesPDF:
         
         columnas = {
             1: [  # Ventas de Farmacia - ✅ OPTIMIZADO
-                ("FECHA/HORA", ANCHO_FECHA_CORTA, 'LEFT'),
+                ("FECHA", ANCHO_FECHA_CORTA, 'LEFT'),
                 ("PRODUCTO", ANCHO_TEXTO_EXTRA_LARGO, 'LEFT'),
                 ("CANT", ANCHO_CANTIDAD, 'RIGHT'),
                 ("P.UNIT", ANCHO_VALOR_CORTO, 'RIGHT'),
@@ -720,7 +720,7 @@ class GeneradorReportesPDF:
             ],
             
             4: [  # Consultas Médicas - ✅ OPTIMIZADO
-                ("FECHA/HORA", ANCHO_FECHA_CORTA, 'LEFT'),
+                ("FECHA", ANCHO_FECHA_CORTA, 'LEFT'),
                 ("ESPECIALIDAD", ANCHO_TEXTO_LARGO, 'LEFT'),
                 ("PACIENTE", ANCHO_TEXTO_MEDIO, 'LEFT'),
                 ("MÉDICO", ANCHO_TEXTO_MEDIO, 'LEFT'),
@@ -728,7 +728,7 @@ class GeneradorReportesPDF:
             ],
             
             5: [  # Laboratorio - ✅ OPTIMIZADO
-                ("FECHA/HORA", ANCHO_FECHA_CORTA, 'LEFT'),
+                ("FECHA", ANCHO_FECHA_CORTA, 'LEFT'),
                 ("ANÁLISIS", ANCHO_TEXTO_EXTRA_LARGO, 'LEFT'),
                 ("PACIENTE", ANCHO_TEXTO_MEDIO, 'LEFT'),
                 ("TÉCNICO", ANCHO_TEXTO_MEDIO, 'LEFT'),
@@ -736,7 +736,7 @@ class GeneradorReportesPDF:
             ],
             
             6: [  # Enfermería - ✅ OPTIMIZADO
-                ("FECHA/HORA", ANCHO_FECHA_CORTA, 'LEFT'),
+                ("FECHA", ANCHO_FECHA_CORTA, 'LEFT'),
                 ("PROCEDIMIENTO", ANCHO_TEXTO_EXTRA_LARGO, 'LEFT'),
                 ("PACIENTE", ANCHO_TEXTO_MEDIO, 'LEFT'),
                 ("ENFERMERO/A", ANCHO_TEXTO_MEDIO, 'LEFT'),
@@ -751,7 +751,7 @@ class GeneradorReportesPDF:
             ],
             
             8: [  # Consolidado - ✅ OPTIMIZADO
-                ("FECHA/HORA", ANCHO_FECHA_CORTA, 'LEFT'),
+                ("FECHA", ANCHO_FECHA_CORTA, 'LEFT'),
                 ("CONCEPTO", ANCHO_TEXTO_EXTRA_LARGO, 'LEFT'),
                 ("TIPO", ANCHO_TEXTO_CORTO, 'CENTER'),
                 ("VALOR", ANCHO_VALOR_LARGO, 'RIGHT')
@@ -1257,7 +1257,7 @@ class GeneradorReportesPDF:
         """Crea tabla principal de movimientos financieros optimizada"""
         try:
             # Preparar datos con encabezados optimizados
-            encabezados = ["FECHA/HORA", "CONCEPTO", "TIPO", "VALOR"]
+            encabezados = ["FECHA", "CONCEPTO", "TIPO", "VALOR"]
             tabla_datos = [encabezados]
             
             total_general = 0

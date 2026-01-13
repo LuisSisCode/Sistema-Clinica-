@@ -3215,7 +3215,7 @@ Item {
         
         try {
             // Configurar elementos por página
-            var elementosPorPagina = 6
+            var elementosPorPagina = 8
             if (enfermeriaModel.itemsPerPageProperty !== elementosPorPagina) {
                 enfermeriaModel.itemsPerPageProperty = elementosPorPagina
             }
@@ -3289,7 +3289,7 @@ Item {
             console.log("⬅️ Navegando a página anterior:", currentPageEnfermeria - 1)
             
             var filtros = construirFiltrosActuales()
-            enfermeriaModel.obtener_procedimientos_paginados(currentPageEnfermeria - 1, 6, filtros)
+            enfermeriaModel.obtener_procedimientos_paginados(currentPageEnfermeria - 1, 8, filtros)
         }
     }
 
@@ -3298,7 +3298,7 @@ Item {
             console.log("➡️ Navegando a página siguiente:", currentPageEnfermeria + 1)
             
             var filtros = construirFiltrosActuales()
-            enfermeriaModel.obtener_procedimientos_paginados(currentPageEnfermeria + 1, 6, filtros)
+            enfermeriaModel.obtener_procedimientos_paginados(currentPageEnfermeria + 1, 8, filtros)
         }
     }
     

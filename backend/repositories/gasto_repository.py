@@ -951,13 +951,13 @@ class GastoRepository(BaseRepository):
     # ===============================
     
     def get_paginated_expenses(self, offset: int, limit: int, filters: Dict[str, Any] = None) -> List[Dict[str, Any]]:
-        """Obtiene gastos paginados - ACTUALIZADO"""
+        """Obtiene gastos paginados - ACTUALIZADO CON FILTROS MEJORADOS"""
         try:
             if offset < 0:
                 offset = 0
             if limit <= 0 or limit > 100:
                 limit = 10
-                
+                    
             query = """
             SELECT g.id, g.Monto, g.Fecha, g.Descripcion, g.ID_Proveedor,
                 tg.Nombre as tipo_nombre,
@@ -973,22 +973,34 @@ class GastoRepository(BaseRepository):
             params = []
             
             if filters:
-                if filters.get('mes') and filters.get('año'):
-                    conditions.append("MONTH(g.Fecha) = ? AND YEAR(g.Fecha) = ?")
-                    params.append(filters['mes'])
-                    params.append(filters['año'])
-                    
+                # Filtro por tipo
                 if filters.get('tipo_id') and filters['tipo_id'] > 0:
                     conditions.append("g.ID_Tipo = ?")
                     params.append(filters['tipo_id'])
+                
+                # Filtro por año (siempre que tenga valor)
+                if filters.get('año') and filters['año'] > 0:
+                    # Si también hay filtro por mes y mes > 0 (no es -1)
+                    if filters.get('mes') and filters['mes'] > 0:
+                        conditions.append("MONTH(g.Fecha) = ? AND YEAR(g.Fecha) = ?")
+                        params.append(filters['mes'])
+                        params.append(filters['año'])
+                    # Si mes es -1, significa "solo año, sin mes específico"
+                    elif filters.get('mes') == -1:
+                        conditions.append("YEAR(g.Fecha) = ?")
+                        params.append(filters['año'])
             
             if conditions:
                 query += " WHERE " + " AND ".join(conditions)
-                
+                    
             query += " ORDER BY g.Fecha DESC OFFSET ? ROWS FETCH NEXT ? ROWS ONLY"
             params.extend([offset, limit])
             
             result = self._execute_query(query, tuple(params))
+            
+            # Debug: mostrar consulta ejecutada
+            print(f"🔍 SQL ejecutada: {query}")
+            print(f"🔍 Parámetros: {params}")
         
             for gasto in result:
                 if gasto.get('Fecha') and hasattr(gasto['Fecha'], 'strftime'):
@@ -1000,27 +1012,34 @@ class GastoRepository(BaseRepository):
                     gasto['Proveedor'] = 'Sin proveedor'
             
             return result
-            
+                
         except Exception as e:
             print(f"❌ Error en get_paginated_expenses: {e}")
             raise e
 
     def get_expenses_count(self, filters: Dict[str, Any] = None) -> int:
-        """Cuenta total de gastos con filtros"""
+        """Cuenta total de gastos con filtros - ACTUALIZADO"""
         query = "SELECT COUNT(*) as total FROM Gastos g"
         params = []
         
         if filters:
             where_conditions = []
+            
             if filters.get('tipo_id'):
                 where_conditions.append("g.ID_Tipo = ?")
                 params.append(filters['tipo_id'])
-            if filters.get('mes'):
-                where_conditions.append("MONTH(g.Fecha) = ?")
-                params.append(filters['mes'])
-            if filters.get('año'):
-                where_conditions.append("YEAR(g.Fecha) = ?")
-                params.append(filters['año'])
+            
+            # Filtro por año (siempre que tenga valor)
+            if filters.get('año') and filters['año'] > 0:
+                # Si también hay filtro por mes
+                if filters.get('mes') and filters['mes'] > 0:
+                    where_conditions.append("MONTH(g.Fecha) = ? AND YEAR(g.Fecha) = ?")
+                    params.append(filters['mes'])
+                    params.append(filters['año'])
+                else:
+                    # Solo filtro por año
+                    where_conditions.append("YEAR(g.Fecha) = ?")
+                    params.append(filters['año'])
             
             if where_conditions:
                 query += " WHERE " + " AND ".join(where_conditions)

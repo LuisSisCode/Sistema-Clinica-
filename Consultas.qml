@@ -3065,7 +3065,7 @@ Item {
         }
         
         var resultado = consultaModel.obtener_consultas_paginadas(
-            currentPageConsultas, 6, filtros
+            currentPageConsultas, 8, filtros
         );
         
         consultasPaginadasModel.clear();

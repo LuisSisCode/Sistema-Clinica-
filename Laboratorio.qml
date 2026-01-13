@@ -3119,7 +3119,8 @@ Item {
         
         try {
             // Configurar elementos por página según tamaño de pantalla
-            var elementosPorPagina = 6
+            // Aqui paginado
+            var elementosPorPagina = 8
             //console.log("📊 Configurando elementos por página:", elementosPorPagina)
             
             // Establecer tamaño de página
@@ -3152,7 +3153,7 @@ Item {
             // ✅ USAR LA MISMA LÓGICA DE FILTROS
             var filtros = construirFiltrosActuales()
             
-            laboratorioModel.obtener_examenes_paginados(currentPageLaboratorio - 1, 6, filtros)
+            laboratorioModel.obtener_examenes_paginados(currentPageLaboratorio - 1, 8, filtros)
         }
     }
 
@@ -3163,7 +3164,7 @@ Item {
             // ✅ USAR LA MISMA LÓGICA DE FILTROS
             var filtros = construirFiltrosActuales()
             
-            laboratorioModel.obtener_examenes_paginados(currentPageLaboratorio + 1, 6, filtros)
+            laboratorioModel.obtener_examenes_paginados(currentPageLaboratorio + 1, 8, filtros)
         }
     }
     

@@ -949,13 +949,6 @@ Item {
         opacity: 0.5
         visible: detalleVentaDialogOpen
         z: 1000
-        
-        MouseArea {
-            anchors.fill: parent
-            onClicked: {
-                detalleVentaDialogOpen = false
-            }
-        }
     }
 
     Rectangle {
@@ -1094,8 +1087,7 @@ Item {
                                     font.bold: true
                                 }
                             }
-                        }
-                        
+                        }                       
                         Item { Layout.fillWidth: true }
                     }
                 }
@@ -1378,15 +1370,7 @@ Item {
                                     }
                                 }
                             }
-                            MouseArea {
-                                anchors.fill: parent
-                                visible: mostrandoMenuContextual
-                                z: 5
-                                onClicked: {
-                                    mostrandoMenuContextual = false
-                                    ventaMenuContextual = null
-                                }
-                            }
+                            
                         }
                     }
                 }

@@ -23,7 +23,7 @@ Item {
     property color darkGray: "#6B7280"
     property color borderColor: "#D1D5DB"
     
-    implicitHeight: 45
+    implicitHeight: 60
     
     // ✅ VALIDACIÓN SIMPLE PARA QOBJECTS
     function esProveedorValido(proveedor) {
@@ -151,7 +151,7 @@ Item {
         id: dropdownPopup
         y: parent.height + 4
         width: parent.width
-        height: Math.min(300, dropdownContent.implicitHeight + 20)
+        height: Math.min(300, dropdownContent.implicitHeight + 35)
         
         background: Rectangle {
             color: "white"
@@ -370,7 +370,7 @@ Item {
     }
     
     function setProveedorById(proveedorId) {
-        console.log("🎯 setProveedorById llamado con ID:", proveedorId)
+        console.log("🎯 setProveedorById llamado con ID:", proveedorId, "Tipo:", typeof proveedorId)
         
         if (!proveedorId || proveedorId <= 0) {
             console.log("🔄 Reseteando proveedor")
@@ -380,18 +380,21 @@ Item {
         
         cargandoProgramaticamente = true
         
+        // Convertir a número para comparación
+        var idBuscado = Number(proveedorId)
+        
         // Buscar el proveedor en el array
         for (var i = 0; i < proveedoresModel.length; i++) {
             var prov = proveedoresModel[i]
-            if (esProveedorValido(prov) && prov.id === proveedorId) {
+            if (esProveedorValido(prov) && Number(prov.id) === idBuscado) {
                 console.log("✅ Encontrado proveedor:", prov.nombre, "ID:", prov.id)
                 
                 proveedorSeleccionado = String(prov.nombre)
-                proveedorIdSeleccionado = proveedorId
+                proveedorIdSeleccionado = idBuscado
                 searchField.text = String(prov.nombre)
                 
                 // Emitir señal
-                proveedorCambiado(String(prov.nombre), proveedorId)
+                proveedorCambiado(String(prov.nombre), idBuscado)
                 break
             }
         }

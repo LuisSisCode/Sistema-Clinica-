@@ -54,6 +54,7 @@ class ProductoRepository(BaseRepository):
         """
         return self._execute_query(query, (codigo,), fetch_one=True)
     
+    # Metodo que utiliza la tabla de productos
     def get_productos_con_marca(self) -> List[Dict[str, Any]]:
         """Obtiene todos los productos con información de marca"""
         query = """

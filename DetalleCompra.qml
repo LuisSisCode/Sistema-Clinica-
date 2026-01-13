@@ -546,15 +546,6 @@ Rectangle {
                                 }
                             }
                             
-                            // Nota informativa
-                            Label {
-                                Layout.fillWidth: true
-                                text: "💡 Doble click en un producto para editar su lote"
-                                color: secondaryTextColor
-                                font.pixelSize: 10
-                                font.italic: true
-                                horizontalAlignment: Text.AlignCenter
-                            }
                         }
                     }
                     

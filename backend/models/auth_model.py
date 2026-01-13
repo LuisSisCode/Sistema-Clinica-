@@ -86,6 +86,13 @@ class AuthModel(QObject):
         if hasattr(self, '_current_user') and self._current_user:
             return self._current_user.get('nombre_usuario', '')
         return ""
+
+    @Slot(result=int)
+    def get_user_id(self) -> int:
+        """Obtiene el ID del usuario autenticado"""
+        if self._current_user:
+            return self._current_user.get('id', 0)
+        return 0
     
     # Slots para QML
     @Slot(str, str)

@@ -250,7 +250,7 @@ class LaboratorioModel(QObject):
     # ===============================
     
     @Slot(int, int, 'QVariant', result='QVariant')
-    def obtener_examenes_paginados(self, page: int, limit: int = 6, filters=None):
+    def obtener_examenes_paginados(self, page: int, limit: int = 8, filters=None):
         """Obtiene página específica - SIN VERIFICACIÓN (solo lectura)"""
         try:
             # Convertir filtros

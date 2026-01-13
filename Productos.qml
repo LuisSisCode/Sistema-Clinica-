@@ -25,7 +25,7 @@ Item {
     property var fechaActual: new Date()
 
     // Propiedades de paginación
-    property int itemsPerPage: 10
+    property int itemsPerPage: 14
     property int currentPage: 0
     property int totalPages: 0
     property var allFilteredProducts: []
@@ -564,7 +564,7 @@ Item {
                     }
                     
                     Label {
-                        text: "Inventario de Productos - V2.0"
+                        text: "Inventario de Productos"
                         font.pixelSize: 14
                         color: darkGrayColor
                     }
@@ -572,59 +572,6 @@ Item {
             }
 
             Item { Layout.fillWidth: true }
-            
-            // ❌ DESHABILITADO EN V2.0 - Productos se crean solo en Compras
-            /*
-            Button {
-                Layout.preferredWidth: 200
-                Layout.preferredHeight: 60
-                
-                background: Rectangle {
-                    color: parent.pressed ? Qt.darker(successColor, 1.2) : successColor
-                    radius: 8
-                    
-                    Behavior on color {
-                        ColorAnimation { duration: 150 }
-                    }
-                    
-                    Rectangle {
-                        anchors.fill: parent
-                        anchors.topMargin: 2
-                        color: "#00000020"
-                        radius: 8
-                        z: -1
-                    }
-                }
-                
-                contentItem: RowLayout {
-                    spacing: 8
-                    anchors.centerIn: parent
-                    
-                    Image {
-                        source: "Resources/iconos/añadirProducto.png"
-                        Layout.preferredWidth: 24
-                        Layout.preferredHeight: 24
-                        fillMode: Image.PreserveAspectFit
-                        smooth: true
-                    }
-                    
-                    Label {
-                        text: "Añadir Producto"
-                        color: whiteColor
-                        font.bold: true
-                        font.pixelSize: 16
-                    }
-                }
-                
-                onClicked: {
-                    abrirCrearProducto()
-                }
-                
-                Behavior on scale {
-                    NumberAnimation { duration: 100 }
-                }
-            }
-            */
             
             Rectangle {
                 Layout.preferredWidth: 130
@@ -872,14 +819,14 @@ Item {
                                 text: "ID"
                                 color: "#2C3E50"
                                 font.bold: true
-                                font.pixelSize: 10
+                                font.pixelSize: 14
                             }
                         }
                         
                         Rectangle {
-                            Layout.preferredWidth: 70  // Reducido de 80
+                            Layout.preferredWidth: 85  // Reducido de 80
                             Layout.minimumWidth: 70
-                            Layout.maximumWidth: 70
+                            Layout.maximumWidth: 85
                             Layout.fillHeight: true
                             color: "transparent"
                             border.color: "#D5DBDB"
@@ -889,7 +836,7 @@ Item {
                                 text: "CÓDIGO"
                                 color: "#2C3E50"
                                 font.bold: true
-                                font.pixelSize: 10
+                                font.pixelSize: 14
                             }
                         }
                         
@@ -908,7 +855,7 @@ Item {
                                 text: "NOMBRE"
                                 color: "#2C3E50"
                                 font.bold: true
-                                font.pixelSize: 12
+                                font.pixelSize: 14
                             }
                         }
                         
@@ -927,14 +874,14 @@ Item {
                                 text: "DESCRIPCIÓN"
                                 color: "#2C3E50"
                                 font.bold: true
-                                font.pixelSize: 12
+                                font.pixelSize: 14
                             }
                         }
                         
                         Rectangle {
-                            Layout.preferredWidth: 100  // Reducido de 120
+                            Layout.preferredWidth: 120  // Reducido de 120
                             Layout.minimumWidth: 90   // Reducido de 100
-                            Layout.maximumWidth: 110  // Reducido de 140
+                            Layout.maximumWidth: 130  // Reducido de 140
                             Layout.fillHeight: true
                             color: "transparent"
                             border.color: "#D5DBDB"
@@ -944,16 +891,16 @@ Item {
                                 text: "PRECIO COMPRA"
                                 color: "#2C3E50"
                                 font.bold: true
-                                font.pixelSize: 10  // Reducido de 11
+                                font.pixelSize: 14
                                 horizontalAlignment: Text.AlignHCenter
                                 wrapMode: Text.WordWrap
                             }
                         }
                         
                         Rectangle {
-                            Layout.preferredWidth: 100  // Reducido de 120
+                            Layout.preferredWidth: 110  // Reducido de 120
                             Layout.minimumWidth: 90   // Reducido de 100
-                            Layout.maximumWidth: 110  // Reducido de 140
+                            Layout.maximumWidth: 120  // Reducido de 140
                             Layout.fillHeight: true
                             color: "transparent"
                             border.color: "#D5DBDB"
@@ -963,7 +910,7 @@ Item {
                                 text: "PRECIO VENTA"
                                 color: "#2C3E50"
                                 font.bold: true
-                                font.pixelSize: 10  // Reducido de 11
+                                font.pixelSize: 14
                                 horizontalAlignment: Text.AlignHCenter
                                 wrapMode: Text.WordWrap
                             }
@@ -982,14 +929,14 @@ Item {
                                 text: "STOCK"
                                 color: "#2C3E50"
                                 font.bold: true
-                                font.pixelSize: 11  // Reducido de 12
+                                font.pixelSize: 14
                             }
                         }
                         
                         Rectangle {
-                            Layout.preferredWidth: 70  // Reducido de 80
+                            Layout.preferredWidth: 85  // Reducido de 80
                             Layout.minimumWidth: 60   // Reducido de 70
-                            Layout.maximumWidth: 75   // Reducido de 90
+                            Layout.maximumWidth: 90   // Reducido de 90
                             Layout.fillHeight: true
                             color: "transparent"
                             border.color: "#D5DBDB"
@@ -999,7 +946,7 @@ Item {
                                 text: "UNIDAD"
                                 color: "#2C3E50"
                                 font.bold: true
-                                font.pixelSize: 10  // Reducido de 11
+                                font.pixelSize: 14
                             }
                         }
                         
@@ -1016,7 +963,7 @@ Item {
                                 text: "MARCA"
                                 color: "#2C3E50"
                                 font.bold: true
-                                font.pixelSize: 11  // Reducido de 12
+                                font.pixelSize: 14
                             }
                         }
 
@@ -1034,7 +981,7 @@ Item {
                                 text: "ACCIONES"
                                 color: "#2C3E50"
                                 font.bold: true
-                                font.pixelSize: 12
+                                font.pixelSize: 14
                             }
                         }
                     }
@@ -1094,15 +1041,15 @@ Item {
                                     anchors.centerIn: parent
                                     text: model.id ? model.id.toString() : ""
                                     color: "#2C3E50"
-                                    font.pixelSize: 11  // Reducido de 12
+                                    font.pixelSize: 14  // Reducido de 12
                                     font.bold: true
                                 }
                             }
                             
                             Rectangle {
-                                Layout.preferredWidth: 70  // Reducido de 80
+                                Layout.preferredWidth: 85  // Reducido de 80
                                 Layout.minimumWidth: 70
-                                Layout.maximumWidth: 70
+                                Layout.maximumWidth: 100
                                 Layout.fillHeight: true
                                 color: "transparent"
                                 border.color: "#D5DBDB"
@@ -1112,7 +1059,7 @@ Item {
                                     text: model.codigo || ""
                                     color: "#3498DB"
                                     font.bold: true
-                                    font.pixelSize: 11  // Reducido de 12
+                                    font.pixelSize: 14  // Reducido de 12
                                 }
                             }
                             
@@ -1133,7 +1080,7 @@ Item {
                                     text: model.nombre || ""
                                     color: "#2C3E50"
                                     font.bold: true
-                                    font.pixelSize: 12
+                                    font.pixelSize: 14
                                     elide: Text.ElideRight
                                     wrapMode: Text.NoWrap
                                 }
@@ -1155,16 +1102,16 @@ Item {
                                     anchors.verticalCenter: parent.verticalCenter
                                     text: model.detalles || ""
                                     color: "#7f8c8d"
-                                    font.pixelSize: 11
+                                    font.pixelSize: 14
                                     elide: Text.ElideRight
                                     wrapMode: Text.NoWrap
                                 }
                             }
                             
                             Rectangle {
-                                Layout.preferredWidth: 100  // Reducido de 120
+                                Layout.preferredWidth: 120  // Reducido de 120
                                 Layout.minimumWidth: 90   // Reducido de 100
-                                Layout.maximumWidth: 110  // Reducido de 140
+                                Layout.maximumWidth: 130  // Reducido de 140
                                 Layout.fillHeight: true
                                 color: "transparent"
                                 border.color: "#D5DBDB"
@@ -1174,15 +1121,15 @@ Item {
                                     text: "Bs " + (model.precioCompra ? model.precioCompra.toFixed(2) : "0.00")
                                     color: "#27AE60"
                                     font.bold: true
-                                    font.pixelSize: 10  // Reducido de 11
+                                    font.pixelSize: 14  // Reducido de 11
                                     horizontalAlignment: Text.AlignHCenter
                                 }
                             }
                             
                             Rectangle {
-                                Layout.preferredWidth: 100  // Reducido de 120
+                                Layout.preferredWidth: 110  // Reducido de 120
                                 Layout.minimumWidth: 90   // Reducido de 100
-                                Layout.maximumWidth: 110  // Reducido de 140
+                                Layout.maximumWidth: 120  // Reducido de 140
                                 Layout.fillHeight: true
                                 color: "transparent"
                                 border.color: "#D5DBDB"
@@ -1192,7 +1139,7 @@ Item {
                                     text: "Bs " + (model.precioVenta ? model.precioVenta.toFixed(2) : "0.00")
                                     color: "#F39C12"
                                     font.bold: true
-                                    font.pixelSize: 10  // Reducido de 11
+                                    font.pixelSize: 14  // Reducido de 11
                                     horizontalAlignment: Text.AlignHCenter
                                 }
                             }
@@ -1218,15 +1165,15 @@ Item {
                                         text: delegateItem.stockActual.toString()
                                         color: "#FFFFFF"
                                         font.bold: true
-                                        font.pixelSize: 9  // Reducido de 10
+                                        font.pixelSize: 14  // Reducido de 10
                                     }
                                 }
                             }
                             
                             Rectangle {
-                                Layout.preferredWidth: 70  // Reducido de 80
+                                Layout.preferredWidth: 85  // Reducido de 80
                                 Layout.minimumWidth: 60   // Reducido de 70
-                                Layout.maximumWidth: 75   // Reducido de 90
+                                Layout.maximumWidth: 90   // Reducido de 90
                                 Layout.fillHeight: true
                                 color: "transparent"
                                 border.color: "#D5DBDB"
@@ -1234,18 +1181,19 @@ Item {
                                 
                                 Rectangle {
                                     anchors.centerIn: parent
-                                    width: Math.min(55, parent.width - 10)  // Reducido de 60
-                                    height: 14
+                                    width: Math.min(70, parent.width )  // Reducido de 60
+                                    height: 30
                                     color: "#9b59b6"
-                                    radius: 7
+                                    radius: 5
                                     
                                     Label {
                                         anchors.centerIn: parent
                                         text: model.unidadMedida || "mg"
-                                        color: "#FFFFFF"
+                                        color: '#ffffff'
                                         font.bold: true
-                                        font.pixelSize: 9
+                                        font.pixelSize: 14
                                         elide: Text.ElideRight
+                                        maximumLineCount: 1
                                     }
                                 }
                             }
@@ -1265,10 +1213,16 @@ Item {
                                     anchors.leftMargin: 4
                                     anchors.right: parent.right
                                     anchors.rightMargin: 4
-                                    text: model.idMarca || "N/A"
+                                    text: {
+                                        var baseText = model.idMarca || "N/A";
+                                        if (baseText.length > 8) {
+                                            return baseText.substring(0, 8) + "...";
+                                        }
+                                        return baseText;
+                                    }
                                     color: "#34495e"
                                     font.bold: true
-                                    font.pixelSize: 10  // Reducido de 11
+                                    font.pixelSize: 14  // Reducido de 11
                                     horizontalAlignment: Text.AlignHCenter
                                     elide: Text.ElideRight
                                 }
@@ -1300,7 +1254,7 @@ Item {
                                         text: parent.text
                                         color: whiteColor
                                         font.bold: true
-                                        font.pixelSize: 10
+                                        font.pixelSize: 14
                                         horizontalAlignment: Text.AlignHCenter
                                         verticalAlignment: Text.AlignVCenter
                                     }
