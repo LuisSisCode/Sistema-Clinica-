@@ -21,9 +21,9 @@ IF NOT EXISTS (SELECT 1 FROM Roles WHERE Nombre = 'Administrador')
 BEGIN
     INSERT INTO Roles (Nombre, Descripcion, Estado) VALUES 
     ('Administrador', 'Acceso completo al sistema', 1),
-    ('Medico', 'Acceso a consultas y pacientes', 1),
+    ('Medico', 'Acceso a consultas y pacientes', 1);
     
-    PRINT '  7 roles creados exitosamente';
+    PRINT '  2 roles creados exitosamente';
 END
 ELSE
 BEGIN
