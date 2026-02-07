@@ -289,7 +289,7 @@ class ReportesModel(QObject):
                 datos = self.repository.get_reporte_gastos(fecha_desde, fecha_hasta)
             elif tipo_reporte == 8:
                 print(f"💰 Obteniendo reporte de ingresos y egresos...")
-                datos = self.repository.get_reporte_consolidado(fecha_desde, fecha_hasta)
+                datos = self.repository.get_reporte_ingresos_egresos(fecha_desde, fecha_hasta)
             else:
                 # ✅ ERROR EXPLÍCITO
                 error_msg = f"Tipo de reporte inválido: {tipo_reporte}"
